@@ -6,6 +6,7 @@ import {
   WS_RECONNECT_MAX_DELAY_MS,
 } from "@openflightdisplay/protocol";
 import type { AircraftState } from "@openflightdisplay/shared-models";
+import { toWebSocketBaseUrl } from "../lib/url";
 
 export type FeedConnectionState = "connecting" | "connected" | "disconnected";
 
@@ -17,7 +18,7 @@ export interface AircraftFeedState {
 }
 
 function toWsUrl(gatewayBaseUrl: string, deviceId: string, pairingToken: string): string {
-  const wsBase = gatewayBaseUrl.replace(/^http/, "ws");
+  const wsBase = toWebSocketBaseUrl(gatewayBaseUrl);
   const params = new URLSearchParams({ deviceId, token: pairingToken });
   return `${wsBase}/ws/v1/aircraft?${params.toString()}`;
 }

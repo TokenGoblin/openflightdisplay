@@ -20,7 +20,12 @@ export function DisplayPage({ connection, onReconfigure }: { connection: StoredC
   const fallbackArea = { kind: "circle" as const, centerLat: nearest?.latitude ?? 0, centerLon: nearest?.longitude ?? 0, radiusKm: 15 };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+    // Verified needed on real hardware: 100vh on mobile Safari/Chrome
+    // includes the area covered by the browser's collapsible address
+    // bar/toolbar, so content sized to exactly 100vh renders mostly
+    // below the visible fold. 100dvh (dynamic viewport height) tracks
+    // the actually-visible area instead.
+    <div style={{ display: "flex", flexDirection: "column", height: "100dvh" }}>
       <StatusBanner status={status} detail={feed.providerStatus?.message} />
       {!isKiosk ? (
         <header style={{ display: "flex", justifyContent: "space-between", padding: "0.5rem 1rem" }}>
@@ -44,11 +49,18 @@ export function DisplayPage({ connection, onReconfigure }: { connection: StoredC
           </div>
         </header>
       ) : null}
-      <div style={{ flex: 1, display: "flex" }}>
-        <div style={{ flex: 2 }}>
+      {/* minHeight: 0 is required here -- without it, a flex item inside
+          a column flex container defaults to min-height: auto, which
+          lets it grow to fit its content (Leaflet's map) instead of
+          shrinking to the space flex:1 actually allotted it, pushing
+          the map's true rendered size past the visible area. */}
+      <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+        <div style={{ flex: 2, minWidth: 0, position: "relative" }}>
           <AircraftMap area={fallbackArea} aircraft={feed.aircraft} />
         </div>
-        <div style={{ flex: 1, padding: "1rem" }}>{nearest ? <AircraftCard aircraft={nearest} lastUpdatedAt={feed.lastUpdatedAt} /> : null}</div>
+        <div style={{ flex: 1, padding: "1rem", overflow: "auto" }}>
+          {nearest ? <AircraftCard aircraft={nearest} lastUpdatedAt={feed.lastUpdatedAt} /> : null}
+        </div>
       </div>
       {isKiosk ? (
         <button type="button" style={{ position: "fixed", bottom: 8, right: 8 }} onClick={() => setIsKiosk(false)}>

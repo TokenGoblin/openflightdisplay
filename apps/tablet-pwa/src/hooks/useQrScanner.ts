@@ -21,6 +21,19 @@ export function useQrScanner(videoRef: RefObject<HTMLVideoElement>, active: bool
     const ctx = canvas.getContext("2d");
 
     async function start() {
+      // Verified on real hardware: browsers only expose
+      // navigator.mediaDevices in a "secure context" (HTTPS or
+      // localhost). This system is reached over plain http://<lan-ip>
+      // by design (see docs/ARCHITECTURE.md -- no TLS in Phase 1), so
+      // camera access is fundamentally unavailable here, not just
+      // denied. Checking up front avoids a cryptic
+      // "undefined is not an object (evaluating
+      // 'navigator.mediaDevices.getUserMedia')" TypeError and gives a
+      // message that actually explains what to do instead.
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setError("Camera scanning needs a secure (HTTPS) connection, which this LAN setup doesn't use -- please use manual entry instead.");
+        return;
+      }
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
         if (cancelled) {

@@ -36,3 +36,48 @@ export function saveStoredConnection(connection: StoredConnection): void {
 export function clearStoredConnection(): void {
   window.localStorage.removeItem(STORAGE_KEY);
 }
+
+/**
+ * In-progress setup-wizard state. Verified needed on real hardware: a
+ * mobile browser reloaded the PWA's tab mid-wizard (after the user
+ * switched tabs to look up a lat/lon), which reset all in-memory
+ * component state -- including the fact that pairing with the Core2 had
+ * already succeeded -- with no way to recover short of re-pairing from
+ * scratch. Persisting each step's progress lets the wizard resume where
+ * it left off instead.
+ */
+const WizardProgressSchema = z.object({
+  step: z.enum(["pair", "location", "radius", "confirm"]),
+  draft: z.object({
+    core2BaseUrl: z.string(),
+    code: z.string(),
+    gatewayBaseUrl: z.string(),
+    deviceId: z.string(),
+    deviceName: z.string(),
+    pairingToken: z.string(),
+    latitude: z.number(),
+    longitude: z.number(),
+    radiusKm: z.number(),
+  }),
+});
+export type WizardProgress = z.infer<typeof WizardProgressSchema>;
+
+const WIZARD_PROGRESS_KEY = "openflightdisplay.wizard-progress.v1";
+
+export function loadWizardProgress(): WizardProgress | null {
+  const raw = window.localStorage.getItem(WIZARD_PROGRESS_KEY);
+  if (!raw) return null;
+  try {
+    return WizardProgressSchema.parse(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+export function saveWizardProgress(progress: WizardProgress): void {
+  window.localStorage.setItem(WIZARD_PROGRESS_KEY, JSON.stringify(progress));
+}
+
+export function clearWizardProgress(): void {
+  window.localStorage.removeItem(WIZARD_PROGRESS_KEY);
+}

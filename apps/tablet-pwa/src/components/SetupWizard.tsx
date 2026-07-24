@@ -3,7 +3,15 @@ import type { DeviceConfiguration } from "@openflightdisplay/shared-models";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { useQrScanner } from "../hooks/useQrScanner";
 import { pairWithCore2, putCore2Config, claimDeviceWithGateway, putGatewayConfig, ApiError } from "../lib/api";
-import { saveStoredConnection, type StoredConnection } from "../lib/storage";
+import { normalizeHttpUrl, toWebSocketBaseUrl, isValidAddress } from "../lib/url";
+import { StatusPill } from "./StatusPill";
+import {
+  saveStoredConnection,
+  loadWizardProgress,
+  saveWizardProgress,
+  clearWizardProgress,
+  type StoredConnection,
+} from "../lib/storage";
 
 type Step = "pair" | "location" | "radius" | "confirm";
 
@@ -44,13 +52,26 @@ function parsePairingQrPayload(text: string): { core2BaseUrl: string; code: stri
 }
 
 export function SetupWizard({ onComplete }: { onComplete: (connection: StoredConnection) => void }) {
-  const [step, setStep] = useState<Step>("pair");
-  const [draft, setDraft] = useState<WizardDraft>(INITIAL_DRAFT);
+  const resumed = loadWizardProgress();
+  const [step, setStep] = useState<Step>(resumed?.step ?? "pair");
+  const [draft, setDraft] = useState<WizardDraft>(resumed?.draft ?? INITIAL_DRAFT);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Persist after every step change so a mobile browser reloading this
+  // tab (e.g. after switching away to look something up) doesn't throw
+  // away progress -- see lib/storage.ts's WizardProgress doc comment.
+  useEffect(() => {
+    saveWizardProgress({ step, draft });
+  }, [step, draft]);
+
   return (
     <div style={{ maxWidth: 480, margin: "2rem auto", padding: "0 1rem" }}>
+      {step !== "pair" ? (
+        <div style={{ marginBottom: "1rem" }}>
+          <StatusPill label="Paired" />
+        </div>
+      ) : null}
       {error ? (
         <p role="alert" style={{ color: "#e5484d" }}>
           {error}
@@ -98,7 +119,7 @@ export function SetupWizard({ onComplete }: { onComplete: (connection: StoredCon
               const config: DeviceConfiguration = {
                 deviceId: draft.deviceId,
                 deviceName: draft.deviceName,
-                gatewayUrl: draft.gatewayBaseUrl.replace(/^http/, "ws") + "/ws/v1/aircraft",
+                gatewayUrl: `${toWebSocketBaseUrl(draft.gatewayBaseUrl)}/ws/v1/aircraft`,
                 monitoringArea: {
                   kind: "circle",
                   centerLat: draft.latitude,
@@ -119,9 +140,14 @@ export function SetupWizard({ onComplete }: { onComplete: (connection: StoredCon
                 pairingToken: draft.pairingToken,
               };
               saveStoredConnection(connection);
+              clearWizardProgress();
               onComplete(connection);
             } catch (err) {
-              setError(err instanceof ApiError ? err.message : "Setup failed unexpectedly");
+              // Surface the real error message whenever we have one
+              // (ApiError or otherwise, e.g. a response that failed
+              // schema validation) rather than a generic "unexpectedly"
+              // that gives the user nothing to act on or report.
+              setError(err instanceof Error ? err.message : "Setup failed unexpectedly");
             } finally {
               setIsSubmitting(false);
             }
@@ -141,7 +167,11 @@ function PairStep({
   onNext: (update: Partial<WizardDraft>) => void;
   onError: (message: string) => void;
 }) {
-  const [mode, setMode] = useState<"scan" | "manual">("scan");
+  // Defaults to manual entry: camera scanning requires a secure (HTTPS)
+  // context, which this LAN-over-plain-HTTP system doesn't have (see
+  // useQrScanner.ts) -- verified on real hardware that "scan" as the
+  // default led straight into that dead end.
+  const [mode, setMode] = useState<"scan" | "manual">("manual");
   const [manualIp, setManualIp] = useState("");
   const [manualCode, setManualCode] = useState("");
   const [gatewayBaseUrl, setGatewayBaseUrl] = useState(draft.gatewayBaseUrl);
@@ -153,7 +183,13 @@ function PairStep({
     setIsPairing(true);
     try {
       const result = await pairWithCore2(core2BaseUrl, code);
-      onNext({ core2BaseUrl, code, pairingToken: result.pairingToken, deviceId: result.deviceId, gatewayBaseUrl });
+      onNext({
+        core2BaseUrl,
+        code,
+        pairingToken: result.pairingToken,
+        deviceId: result.deviceId,
+        gatewayBaseUrl: normalizeHttpUrl(gatewayBaseUrl),
+      });
     } catch (err) {
       onError(err instanceof ApiError ? err.message : "Could not pair with the display");
     } finally {
@@ -193,13 +229,17 @@ function PairStep({
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            void completePairing(`http://${manualIp}`, manualCode);
+            if (!isValidAddress(manualIp) || !isValidAddress(gatewayBaseUrl)) return;
+            void completePairing(normalizeHttpUrl(manualIp), manualCode);
           }}
         >
           <label>
             Display IP address
             <input value={manualIp} onChange={(e) => setManualIp(e.target.value)} placeholder="192.168.1.42" required />
           </label>
+          {manualIp.trim() !== "" && !isValidAddress(manualIp) ? (
+            <p role="alert">That doesn't look like a valid IP address.</p>
+          ) : null}
           <label>
             Pairing code
             <input value={manualCode} onChange={(e) => setManualCode(e.target.value)} placeholder="482913" required />
@@ -213,7 +253,13 @@ function PairStep({
               required
             />
           </label>
-          <button type="submit" disabled={isPairing}>
+          {gatewayBaseUrl.trim() !== "" && !isValidAddress(gatewayBaseUrl) ? (
+            <p role="alert">That doesn't look like a valid gateway address.</p>
+          ) : null}
+          <button
+            type="submit"
+            disabled={isPairing || !isValidAddress(manualIp) || !isValidAddress(gatewayBaseUrl)}
+          >
             {isPairing ? "Pairing…" : "Pair"}
           </button>
         </form>
@@ -231,9 +277,37 @@ function LocationStep({
   onBack: () => void;
   onNext: (update: Partial<WizardDraft>) => void;
 }) {
-  const [latitude, setLatitude] = useState(draft.latitude || 0);
-  const [longitude, setLongitude] = useState(draft.longitude || 0);
+  // Verified needed on real hardware/mobile: `type="number"` combined
+  // with `value={number}` + `onChange={... Number(e.target.value) ...}`
+  // fights the user mid-edit -- clearing the field or typing a lone "-"
+  // to start a negative number produces an empty string, Number("") is
+  // 0 (not NaN), so the input immediately snaps back to "0" before a
+  // second character can be typed. Keeping the raw text in state (only
+  // parsing to a number on submit) avoids that entirely, and plain
+  // text+inputMode="decimal" sidesteps mobile browsers' inconsistent
+  // native number-input behavior for negatives/decimals.
+  const [latitudeText, setLatitudeText] = useState(String(draft.latitude));
+  const [longitudeText, setLongitudeText] = useState(String(draft.longitude));
   const geo = useGeolocation();
+
+  useEffect(() => {
+    if (geo.result) {
+      setLatitudeText(String(geo.result.latitude));
+      setLongitudeText(String(geo.result.longitude));
+    }
+  }, [geo.result]);
+
+  const latitude = Number(latitudeText);
+  const longitude = Number(longitudeText);
+  const isValid =
+    latitudeText.trim() !== "" &&
+    longitudeText.trim() !== "" &&
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude) &&
+    latitude >= -90 &&
+    latitude <= 90 &&
+    longitude >= -180 &&
+    longitude <= 180;
 
   return (
     <div>
@@ -242,45 +316,45 @@ function LocationStep({
         {geo.isLoading ? "Locating…" : "Use my location"}
       </button>
       {geo.error ? <p role="alert">{geo.error}</p> : null}
-      {geo.result ? (
-        <p>
-          Detected: {geo.result.latitude.toFixed(4)}, {geo.result.longitude.toFixed(4)}
-        </p>
-      ) : null}
 
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          onNext({
-            latitude: geo.result?.latitude ?? latitude,
-            longitude: geo.result?.longitude ?? longitude,
-          });
+          if (!isValid) return;
+          onNext({ latitude, longitude });
         }}
       >
         <label>
           Latitude
           <input
-            type="number"
-            step="any"
-            value={geo.result?.latitude ?? latitude}
-            onChange={(e) => setLatitude(Number(e.target.value))}
+            type="text"
+            inputMode="decimal"
+            value={latitudeText}
+            onChange={(e) => setLatitudeText(e.target.value)}
+            placeholder="e.g. 47.6062"
             required
           />
         </label>
         <label>
           Longitude
           <input
-            type="number"
-            step="any"
-            value={geo.result?.longitude ?? longitude}
-            onChange={(e) => setLongitude(Number(e.target.value))}
+            type="text"
+            inputMode="decimal"
+            value={longitudeText}
+            onChange={(e) => setLongitudeText(e.target.value)}
+            placeholder="e.g. -122.3321"
             required
           />
         </label>
+        {!isValid && (latitudeText.trim() !== "" || longitudeText.trim() !== "") ? (
+          <p role="alert">Enter a valid latitude (-90 to 90) and longitude (-180 to 180).</p>
+        ) : null}
         <button type="button" onClick={onBack}>
           Back
         </button>
-        <button type="submit">Next</button>
+        <button type="submit" disabled={!isValid}>
+          Next
+        </button>
       </form>
     </div>
   );
@@ -295,12 +369,18 @@ function RadiusStep({
   onBack: () => void;
   onNext: (update: Partial<WizardDraft>) => void;
 }) {
-  const [radiusKm, setRadiusKm] = useState(draft.radiusKm);
+  // Same fix as LocationStep: keep the raw text in state and only parse
+  // to a number on submit, rather than fighting the user's edit with a
+  // number-typed controlled value on every keystroke.
+  const [radiusText, setRadiusText] = useState(String(draft.radiusKm));
+  const radiusKm = Number(radiusText);
+  const isValid = radiusText.trim() !== "" && Number.isFinite(radiusKm) && radiusKm >= 0.5 && radiusKm <= 500;
 
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
+        if (!isValid) return;
         onNext({ radiusKm });
       }}
     >
@@ -308,19 +388,21 @@ function RadiusStep({
       <label>
         Radius (km)
         <input
-          type="number"
-          min={0.5}
-          max={500}
-          step="0.5"
-          value={radiusKm}
-          onChange={(e) => setRadiusKm(Number(e.target.value))}
+          type="text"
+          inputMode="decimal"
+          value={radiusText}
+          onChange={(e) => setRadiusText(e.target.value)}
+          placeholder="e.g. 15"
           required
         />
       </label>
+      {!isValid && radiusText.trim() !== "" ? <p role="alert">Enter a radius between 0.5 and 500 km.</p> : null}
       <button type="button" onClick={onBack}>
         Back
       </button>
-      <button type="submit">Next</button>
+      <button type="submit" disabled={!isValid}>
+        Next
+      </button>
     </form>
   );
 }

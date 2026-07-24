@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SetupWizard } from "../src/components/SetupWizard";
+import { saveWizardProgress, loadWizardProgress } from "../src/lib/storage";
 
 vi.mock("../src/hooks/useQrScanner", () => ({
   useQrScanner: () => ({ decodedText: null, error: null }),
@@ -55,5 +56,32 @@ describe("SetupWizard", () => {
     await waitFor(() => expect(onComplete).toHaveBeenCalledWith(
       expect.objectContaining({ deviceId: "core2-abc123", gatewayBaseUrl: "http://192.168.1.50:8787" }),
     ));
+
+    // Verified needed on real hardware: a mobile browser reloading the
+    // tab mid-wizard must not lose progress, so completing the wizard
+    // should also clear it back out.
+    expect(loadWizardProgress()).toBeNull();
+  });
+
+  it("resumes from a persisted step instead of restarting from pair", async () => {
+    saveWizardProgress({
+      step: "location",
+      draft: {
+        core2BaseUrl: "http://192.168.1.42",
+        code: "482913",
+        gatewayBaseUrl: "http://192.168.1.50:8787",
+        deviceId: "core2-abc123",
+        deviceName: "OpenFlightDisplay",
+        pairingToken: "tok-1",
+        latitude: 0,
+        longitude: 0,
+        radiusKm: 15,
+      },
+    });
+
+    render(<SetupWizard onComplete={vi.fn()} />);
+
+    expect(screen.getByText("Where should we monitor?")).toBeInTheDocument();
+    expect(screen.queryByText("Add your display")).not.toBeInTheDocument();
   });
 });

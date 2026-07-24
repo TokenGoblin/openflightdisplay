@@ -54,7 +54,14 @@ export async function putCore2Config(core2BaseUrl: string, pairingToken: string,
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${pairingToken}` },
       body: JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION, config }),
     },
-    (body) => DeviceConfigurationSchema.parse((body as { config: unknown }).config),
+    // Verified needed on real hardware: unlike the gateway's REST routes
+    // (which wrap responses as {schemaVersion, config}), the Core2's own
+    // GET/PUT /api/v1/config returns the DeviceConfiguration fields
+    // flat/bare -- matching docs/PROTOCOL.md and pairing_server.cpp's
+    // serializeDeviceConfig(). Parsing it as {config: ...} here threw a
+    // ZodError (not an ApiError), which showed up to the user as a
+    // generic "Setup failed unexpectedly" with no useful detail.
+    (body) => DeviceConfigurationSchema.parse(body),
   );
 }
 
