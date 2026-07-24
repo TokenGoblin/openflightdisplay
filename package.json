@@ -1,0 +1,21 @@
+{
+  "name": "openflightdisplay",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Open-source aircraft-tracking display system for M5Stack Core2 and tablet PWA",
+  "license": "MIT",
+  "workspaces": [
+    "packages/*",
+    "services/gateway",
+    "apps/tablet-pwa"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  }
+}
