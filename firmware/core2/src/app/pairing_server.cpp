@@ -19,6 +19,21 @@ namespace {
 constexpr size_t kBodyBufferCapacity = 1024;
 char g_bodyBuffer[kBodyBufferCapacity];
 
+// File-scope (not function-local) statics for every ArduinoJson document
+// used in this file -- see domain/protocol.cpp's detailed note on why a
+// *function-local* static of a non-POD type is itself a stack-overflow
+// risk here (its lazy-init guard registers an atexit handler on first
+// use, confirmed via a symbolicated crash to be enough on its own to
+// blow the stack in a deep call chain). File-scope statics are
+// constructed once at startup instead, with no per-call guard check.
+// Safe to share across these handlers: ESPAsyncWebServer's async task
+// processes one callback at a time, not concurrently.
+StaticJsonDocument<128> g_errorDoc;
+StaticJsonDocument<192> g_pairRequestDoc;
+StaticJsonDocument<192> g_pairResponseDoc;
+StaticJsonDocument<256> g_statusDoc;
+StaticJsonDocument<kBodyBufferCapacity> g_configWrapperDoc;
+
 void generatePairingToken(char* out, size_t outLen) {
   static const char kHex[] = "0123456789abcdef";
   size_t i = 0;
@@ -41,11 +56,11 @@ bool checkBearerToken(AsyncWebServerRequest* request, const AppContext& ctx) {
 }
 
 void sendJsonError(AsyncWebServerRequest* request, int code, const char* error) {
-  StaticJsonDocument<128> doc;
-  doc["schemaVersion"] = 1;
-  doc["error"] = error;
+  g_errorDoc.clear();
+  g_errorDoc["schemaVersion"] = 1;
+  g_errorDoc["error"] = error;
   char buf[128];
-  const size_t len = serializeJson(doc, buf, sizeof(buf));
+  const size_t len = serializeJson(g_errorDoc, buf, sizeof(buf));
   request->send(code, "application/json", String(buf, len));
 }
 
@@ -76,6 +91,20 @@ const char* gatewayStateToString(GatewayConnectionState s) {
 }  // namespace
 
 void registerPairingRoutes(AsyncWebServer& server, AppContext& ctx) {
+  // CORS: the PWA is served from its own origin (a dev server or static
+  // host), never the Core2's own IP, so every response here is
+  // cross-origin from the browser's perspective. Verified needed on real
+  // hardware -- without this, the PWA's fetch() calls failed with a
+  // generic "Load failed"/"Failed to fetch" because the browser's CORS
+  // preflight (OPTIONS) had nothing to talk to and blocked the real
+  // request before it ever reached the device.
+  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
+  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
+  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  server.on("/pair", HTTP_OPTIONS, [](AsyncWebServerRequest* request) { request->send(200); });
+  server.on("/api/v1/config", HTTP_OPTIONS, [](AsyncWebServerRequest* request) { request->send(200); });
+
   // NOTE (unverified without hardware): whether ESPAsyncWebServer invokes
   // the onBody callback at all for a genuinely empty (Content-Length: 0)
   // POST varies by version. A deliberate choice was made NOT to also
@@ -85,6 +114,29 @@ void registerPairingRoutes(AsyncWebServer& server, AppContext& ctx) {
   // malformed empty-body request hangs until the client's own timeout,
   // rather than crashing. Revisit once this is buildable against the
   // real library.
+  // Verified on real hardware: a phone's camera app treats the QR code's
+  // "http://<ip>/pair?code=..." payload as a link and opens it directly
+  // in the browser (a plain GET), rather than handing it to the
+  // OpenFlightDisplay PWA's own in-app scanner as originally intended.
+  // Since /pair was previously POST-only, that GET hit nothing and
+  // rendered as a dead page. This handler exists purely to give that
+  // browser navigation somewhere useful to land -- it deliberately does
+  // NOT claim the pairing code (tryClaim is single-use), so the PWA's
+  // own pairing flow (camera scan within the app, or manual entry) still
+  // works afterward exactly as before.
+  server.on("/pair", HTTP_GET, [](AsyncWebServerRequest* request) {
+    request->send(200, "text/html",
+                   "<!DOCTYPE html><html><head><meta name=\"viewport\" "
+                   "content=\"width=device-width, initial-scale=1\">"
+                   "<title>OpenFlightDisplay pairing</title></head>"
+                   "<body style=\"font-family: sans-serif; max-width: 420px; margin: 2rem auto; padding: 0 1rem;\">"
+                   "<h2>Open the OpenFlightDisplay app to finish pairing</h2>"
+                   "<p>This code is meant to be scanned from inside the OpenFlightDisplay "
+                   "tablet app's \"Add Display\" screen (or entered there manually), not opened "
+                   "as a regular link.</p>"
+                   "</body></html>");
+  });
+
   server.on(
       "/pair", HTTP_POST, [](AsyncWebServerRequest* request) { /* response sent from onBody below */ }, nullptr,
       [&ctx](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
@@ -98,12 +150,11 @@ void registerPairingRoutes(AsyncWebServer& server, AppContext& ctx) {
         if (index + len < total) return;  // wait for the rest of the body
         g_bodyBuffer[total] = '\0';
 
-        StaticJsonDocument<192> doc;
-        if (deserializeJson(doc, g_bodyBuffer, total) || (doc["schemaVersion"] | -1) != 1) {
+        if (deserializeJson(g_pairRequestDoc, g_bodyBuffer, total) || (g_pairRequestDoc["schemaVersion"] | -1) != 1) {
           sendJsonError(request, 400, "invalid_request");
           return;
         }
-        const char* code = doc["code"] | "";
+        const char* code = g_pairRequestDoc["code"] | "";
         if (!ctx.pairingCodeManager.tryClaim(code, millis())) {
           sendJsonError(request, 401, "invalid_or_expired_code");
           return;
@@ -115,28 +166,28 @@ void registerPairingRoutes(AsyncWebServer& server, AppContext& ctx) {
         ctx.hasPairingToken = true;
         ctx.configStore.savePairingToken(token);
 
-        StaticJsonDocument<192> resp;
-        resp["schemaVersion"] = 1;
-        resp["pairingToken"] = token;
-        resp["deviceId"] = ctx.deviceId;
+        g_pairResponseDoc.clear();
+        g_pairResponseDoc["schemaVersion"] = 1;
+        g_pairResponseDoc["pairingToken"] = token;
+        g_pairResponseDoc["deviceId"] = ctx.deviceId;
         char buf[192];
-        const size_t respLen = serializeJson(resp, buf, sizeof(buf));
+        const size_t respLen = serializeJson(g_pairResponseDoc, buf, sizeof(buf));
         request->send(200, "application/json", String(buf, respLen));
       });
 
   server.on("/api/v1/status", HTTP_GET, [&ctx](AsyncWebServerRequest* request) {
-    StaticJsonDocument<256> doc;
-    doc["schemaVersion"] = 1;
-    doc["deviceId"] = ctx.deviceId;
-    doc["firmwareVersion"] = ctx.firmwareVersion;
-    doc["wifiState"] = wifiStateToString(ctx.wifiState);
-    doc["gatewayConnectionState"] = gatewayStateToString(ctx.gatewayState);
+    g_statusDoc.clear();
+    g_statusDoc["schemaVersion"] = 1;
+    g_statusDoc["deviceId"] = ctx.deviceId;
+    g_statusDoc["firmwareVersion"] = ctx.firmwareVersion;
+    g_statusDoc["wifiState"] = wifiStateToString(ctx.wifiState);
+    g_statusDoc["gatewayConnectionState"] = gatewayStateToString(ctx.gatewayState);
     if (ctx.hasLatestAircraft) {
-      doc["lastAircraftUpdateAgeSeconds"] = (millis() - ctx.lastAircraftUpdateAtMs) / 1000;
+      g_statusDoc["lastAircraftUpdateAgeSeconds"] = (millis() - ctx.lastAircraftUpdateAtMs) / 1000;
     }
-    doc["freeHeapBytes"] = ESP.getFreeHeap();
+    g_statusDoc["freeHeapBytes"] = ESP.getFreeHeap();
     char buf[256];
-    const size_t len = serializeJson(doc, buf, sizeof(buf));
+    const size_t len = serializeJson(g_statusDoc, buf, sizeof(buf));
     request->send(200, "application/json", String(buf, len));
   });
 
@@ -173,14 +224,20 @@ void registerPairingRoutes(AsyncWebServer& server, AppContext& ctx) {
         // docs/PROTOCOL.md, not the bare config object -- unwrap it before
         // handing the inner object to the domain-layer validator, which
         // expects a bare config JSON (matching how it's unit-tested).
-        StaticJsonDocument<kBodyBufferCapacity> wrapper;
-        if (deserializeJson(wrapper, g_bodyBuffer, total) || (wrapper["schemaVersion"] | -1) != 1 ||
-            !wrapper.containsKey("config")) {
+        // g_configWrapperDoc is file-scope (see the note near its
+        // declaration) -- at kBodyBufferCapacity (1024) bytes, this was
+        // the single biggest stack consumer in this file.
+        if (deserializeJson(g_configWrapperDoc, g_bodyBuffer, total) ||
+            (g_configWrapperDoc["schemaVersion"] | -1) != 1 || !g_configWrapperDoc.containsKey("config")) {
           sendJsonError(request, 400, "invalid_config");
           return;
         }
-        char configJson[kBodyBufferCapacity];
-        const size_t configLen = serializeJson(wrapper["config"], configJson, sizeof(configJson));
+        // A plain char array has no constructor, so it never needed the
+        // file-scope treatment above to avoid the atexit/lazy-init issue
+        // -- `static` alone (moving it off the stack) was always fine
+        // for this one.
+        static char configJson[kBodyBufferCapacity];
+        const size_t configLen = serializeJson(g_configWrapperDoc["config"], configJson, sizeof(configJson));
 
         DeviceConfig parsed;
         char error[64] = {0};

@@ -23,7 +23,13 @@ class Display {
   void renderProvisioning(const char* apName);
   void renderPairingReady(const char* ipAddress, const char* pairingCode);
   void renderSingleAircraft(const ofd::AircraftState& aircraft, uint32_t ageSeconds);
-  void renderStatus(StatusMessage message);
+  // `ipAddress` is shown (when non-empty) beneath the status message so
+  // a user who needs to re-enter it in the PWA (e.g. after losing setup
+  // progress -- verified needed on real hardware, where a mobile browser
+  // tab reset mid-wizard left no way to recover the IP once the Core2
+  // had already moved on to "configuration required") always has it
+  // on-screen, not just during the one-time pairing-QR screen.
+  void renderStatus(StatusMessage message, const char* ipAddress = "");
   void renderIdleClock(const char* timeHhMm, bool wifiConnected, bool gatewayConnected);
 
   // Call once per loop() iteration; handles the touch-to-toggle-diagnostics

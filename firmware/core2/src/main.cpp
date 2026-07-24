@@ -26,13 +26,20 @@ AppContext g_ctx;
 Display g_display;
 GatewayClient g_gatewayClient;
 
-uint32_t g_wifiConnectAttemptAtMs = 0;
 bool g_wifiJustSaved = false;
 uint32_t g_wifiJustSavedAtMs = 0;
 uint32_t g_lastPairingCodeRegenAtMs = 0;
+uint32_t g_lastWifiCredsCheckAtMs = 0;
 
 constexpr uint32_t kWifiConnectTimeoutMs = 15000;
 constexpr uint32_t kWifiSaveRebootDelayMs = 1500;
+
+// Verified on real hardware: without this throttle, loop() re-checks
+// LittleFS for saved Wi-Fi credentials on every single iteration (tens of
+// times per second) while in provisioning mode, needlessly hammering the
+// filesystem and spamming the serial log with LittleFS's own internal
+// "file does not exist" error line on every failed check.
+constexpr uint32_t kWifiCredsCheckIntervalMs = 1000;
 
 // loop() runs continuously with no inherent delay; redrawing the full
 // screen on every iteration would flicker and burn SPI bandwidth for no
@@ -68,11 +75,17 @@ void enterConnectedMode() {
   registerPairingRoutes(g_server, g_ctx);
   g_server.begin();
 
-  if (!g_ctx.hasPairingToken) {
+  if (!g_ctx.hasConfig) {
+    // Simplified per real-hardware feedback: keep showing IP + a live
+    // pairing code as long as setup isn't finished, rather than switching
+    // away the moment pairing succeeds once. A mobile browser losing its
+    // place mid-wizard (tab reload, backgrounding) previously left no way
+    // back to this screen at all -- re-pairing is safe/idempotent, so
+    // there's no reason not to keep it available the whole time.
     g_ctx.pairingCodeManager.regenerate(millis());
     g_lastPairingCodeRegenAtMs = millis();
     g_display.renderPairingReady(WiFi.localIP().toString().c_str(), g_ctx.pairingCodeManager.currentCode());
-  } else if (g_ctx.hasConfig && g_ctx.config.hasGatewayUrl) {
+  } else if (g_ctx.config.hasGatewayUrl) {
     g_gatewayClient.begin(g_ctx);
   }
 }
@@ -80,9 +93,10 @@ void enterConnectedMode() {
 void renderCurrentState() {
   if (g_ctx.wifiState == WifiState::Provisioning) return;  // provisioning screen already shown
 
-  if (!g_ctx.hasPairingToken) {
-    // Pairing screen stays up; regenerate the code if it expired so the
-    // display never gets stuck showing a dead code.
+  if (!g_ctx.hasConfig || !g_ctx.config.hasMonitoringArea || !g_ctx.config.hasGatewayUrl) {
+    // Same screen the whole time setup isn't done -- see the comment in
+    // enterConnectedMode(). Regenerate the code periodically so it never
+    // goes stale/expired while this screen is up.
     if (millis() - g_lastPairingCodeRegenAtMs > PairingCodeManager::kExpiryMs) {
       g_ctx.pairingCodeManager.regenerate(millis());
       g_lastPairingCodeRegenAtMs = millis();
@@ -91,9 +105,16 @@ void renderCurrentState() {
     return;
   }
 
-  if (!g_ctx.hasConfig || !g_ctx.config.hasMonitoringArea || !g_ctx.config.hasGatewayUrl) {
-    g_display.renderStatus(StatusMessage::ConfigurationRequired);
-    return;
+  // Verified needed on real hardware: g_gatewayClient.begin() was only
+  // ever called from enterConnectedMode(), which runs once at boot. If
+  // config arrives later (the normal case -- the PWA writes it after the
+  // device is already sitting on the pairing screen), nothing ever
+  // started the gateway connection, and the device was stuck showing
+  // "Data source unavailable" until the next manual reset. Unconfigured
+  // is the state's default and only value before begin() is ever called,
+  // so this reliably means "config just became available, start now."
+  if (g_ctx.gatewayState == GatewayConnectionState::Unconfigured) {
+    g_gatewayClient.begin(g_ctx);
   }
 
   if (g_ctx.gatewayState != GatewayConnectionState::Connected) {
@@ -159,22 +180,26 @@ void loop() {
 
     // wifi_provisioning.cpp's POST handler saves credentials but never
     // reboots from inside an async callback (so the HTTP response can
-    // finish flushing first); poll for the saved file here instead.
-    if (!g_wifiJustSaved) {
+    // finish flushing first); poll for the saved file here instead --
+    // throttled (see kWifiCredsCheckIntervalMs) rather than every
+    // iteration.
+    if (!g_wifiJustSaved && millis() - g_lastWifiCredsCheckAtMs >= kWifiCredsCheckIntervalMs) {
+      g_lastWifiCredsCheckAtMs = millis();
       WifiCredentials creds;
       if (loadWifiCredentials(creds)) {
         g_wifiJustSaved = true;
         g_wifiJustSavedAtMs = millis();
       }
-    } else if (millis() - g_wifiJustSavedAtMs > kWifiSaveRebootDelayMs) {
+    } else if (g_wifiJustSaved && millis() - g_wifiJustSavedAtMs > kWifiSaveRebootDelayMs) {
       ESP.restart();
     }
     return;
   }
 
-  if (g_ctx.hasPairingToken && g_ctx.hasConfig && g_ctx.config.hasGatewayUrl) {
-    g_gatewayClient.loop();
-  }
+  // GatewayClient no longer needs pumping from here -- it now runs its
+  // own dedicated FreeRTOS task with a much larger stack (see
+  // gateway_client.h/.cpp) after loopTask's default 8KB stack overflowed
+  // on real hardware the moment actual aircraft data arrived.
 
   if (millis() - g_lastRenderAtMs >= kRenderIntervalMs) {
     renderCurrentState();

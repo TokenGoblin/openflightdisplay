@@ -43,6 +43,27 @@ ProviderHealth parseProviderHealth(const char* raw) {
 // (docs/CORE2_HARDWARE.md).
 constexpr size_t kServerMessageJsonCapacity = 4096;
 
+// Verified needed on real hardware, in two stages:
+// 1. As a stack-local variable, this document overflowed loopTask's 8KB
+//    stack the moment a real aircraft-update payload (not just a small
+//    heartbeat) arrived -- the call chain that reaches this function
+//    (loop() -> GatewayClient::loop() -> WebSocketsClient's internal
+//    frame handling, itself ~30 stack frames of std::function/std::bind
+//    glue) left almost no headroom.
+// 2. Making it a *function-local* `static` moved the data out of the
+//    stack, but backfired: a function-local static of a non-POD type
+//    (StaticJsonDocument has a constructor) gets a compiler-generated
+//    thread-safe lazy-init guard, and initializing it registers an
+//    atexit handler (acquiring a recursive newlib lock in the process)
+//    on first use -- which, landing on top of that same already-deep
+//    call chain, was enough on its own to blow the stack (confirmed via
+//    a symbolicated crash: atexit -> __register_exitproc ->
+//    __retarget_lock_acquire_recursive appeared directly above this
+//    function in the backtrace). A file-scope static sidesteps this
+//    entirely -- it's constructed once at startup, before setup()/loop()
+//    ever runs, with no per-call guard check.
+static StaticJsonDocument<kServerMessageJsonCapacity> g_serverMessageDoc;
+
 bool parseServerMessage(const char* json, size_t len, ParsedServerMessage& out, char* errorOut,
                          size_t errorOutLen) {
   if (json == nullptr || len == 0) {
@@ -50,7 +71,7 @@ bool parseServerMessage(const char* json, size_t len, ParsedServerMessage& out, 
     return false;
   }
 
-  StaticJsonDocument<kServerMessageJsonCapacity> doc;
+  StaticJsonDocument<kServerMessageJsonCapacity>& doc = g_serverMessageDoc;
   const DeserializationError err = deserializeJson(doc, json, len);
   if (err) {
     setError(errorOut, errorOutLen, "malformed JSON");

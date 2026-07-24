@@ -1,6 +1,8 @@
 #include "app/gateway_client.h"
 
 #include <WebSocketsClient.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 #include <cstring>
 
@@ -94,6 +96,22 @@ void handleServerMessage(AppContext& ctx, const uint8_t* payload, size_t len) {
       break;
   }
 }
+// 16KB -- generous headroom over the ~30-frame-deep call chain observed
+// on real hardware (loopTask's default 8KB overflowed as soon as real
+// aircraft data arrived; see the note in gateway_client.h). Runs at the
+// default Arduino task priority (1) so it doesn't preempt anything
+// timing-sensitive.
+constexpr uint32_t kWsTaskStackWords = 16384 / sizeof(StackType_t);
+constexpr UBaseType_t kWsTaskPriority = 1;
+bool g_wsTaskStarted = false;
+
+void wsTaskFunction(void*) {
+  for (;;) {
+    g_ws.loop();
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
+}
+
 }  // namespace
 
 void GatewayClient::begin(AppContext& ctx) {
@@ -141,8 +159,11 @@ void GatewayClient::begin(AppContext& ctx) {
   });
 
   ctx.gatewayState = GatewayConnectionState::Connecting;
-}
 
-void GatewayClient::loop() { g_ws.loop(); }
+  if (!g_wsTaskStarted) {
+    g_wsTaskStarted = true;
+    xTaskCreate(wsTaskFunction, "gwWsTask", kWsTaskStackWords, nullptr, kWsTaskPriority, nullptr);
+  }
+}
 
 }  // namespace ofd::app

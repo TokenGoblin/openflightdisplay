@@ -65,12 +65,15 @@ void Display::renderPairingReady(const char* ipAddress, const char* pairingCode)
   std::snprintf(url, sizeof(url), "http://%s/pair?code=%s", ipAddress, pairingCode);
   drawQrCode(url, 20, 20, 4);
 
+  // Verified on real hardware: the QR code doesn't reliably work either
+  // way (phone camera apps open it as a dead link; in-app scanning needs
+  // HTTPS, which this LAN-over-HTTP system doesn't have -- see
+  // useQrScanner.ts) -- manual entry is the one path that actually works,
+  // so it's what this screen leads with now.
   M5.Display.setTextColor(TFT_BLACK, TFT_WHITE);
   M5.Display.setTextSize(1);
   M5.Display.setCursor(180, 30);
-  M5.Display.print("Scan to pair, or");
-  M5.Display.setCursor(180, 45);
-  M5.Display.print("enter manually:");
+  M5.Display.print("Enter in the app:");
   M5.Display.setTextSize(2);
   M5.Display.setCursor(180, 65);
   M5.Display.print(ipAddress);
@@ -118,7 +121,7 @@ void Display::renderSingleAircraft(const ofd::AircraftState& aircraft, uint32_t 
   M5.Display.printf("updated %us ago", static_cast<unsigned>(ageSeconds));
 }
 
-void Display::renderStatus(StatusMessage message) {
+void Display::renderStatus(StatusMessage message, const char* ipAddress) {
   M5.Display.fillScreen(TFT_BLACK);
   M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
   M5.Display.setTextSize(2);
@@ -143,6 +146,12 @@ void Display::renderStatus(StatusMessage message) {
     case StatusMessage::DataIsStale:
       M5.Display.print("Data is stale");
       break;
+  }
+
+  if (ipAddress != nullptr && ipAddress[0] != '\0') {
+    M5.Display.setTextSize(1);
+    M5.Display.setCursor(10, 220);
+    M5.Display.printf("Device IP: %s", ipAddress);
   }
 }
 

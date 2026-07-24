@@ -27,6 +27,17 @@ bool copyBounded(const char* src, char* dst, size_t dstLen) {
 // docs/CORE2_HARDWARE.md's "no unbounded allocation" rule.
 constexpr size_t kConfigJsonCapacity = 512;
 
+// File-scope (not function-local) statics -- see the detailed note in
+// domain/protocol.cpp on why a *function-local* static of a non-POD
+// ArduinoJson type is itself a stack-overflow risk (its lazy-init guard
+// registers an atexit handler on first use, which was enough on its own
+// to blow the stack in a deep call chain). These are constructed once at
+// startup instead. Two separate instances (parse vs. serialize) since
+// they're never needed at the same time but keeping them distinct avoids
+// any risk of one function's leftover state bleeding into the other.
+static StaticJsonDocument<kConfigJsonCapacity> g_configParseDoc;
+static StaticJsonDocument<kConfigJsonCapacity> g_configSerializeDoc;
+
 bool parseAndValidateDeviceConfig(const char* json, size_t len, DeviceConfig& out, char* errorOut,
                                    size_t errorOutLen) {
   if (json == nullptr || len == 0) {
@@ -34,7 +45,7 @@ bool parseAndValidateDeviceConfig(const char* json, size_t len, DeviceConfig& ou
     return false;
   }
 
-  StaticJsonDocument<kConfigJsonCapacity> doc;
+  StaticJsonDocument<kConfigJsonCapacity>& doc = g_configParseDoc;
   const DeserializationError err = deserializeJson(doc, json, len);
   if (err) {
     setError(errorOut, errorOutLen, "malformed JSON");
@@ -115,7 +126,8 @@ bool parseAndValidateDeviceConfig(const char* json, size_t len, DeviceConfig& ou
 }
 
 size_t serializeDeviceConfig(const DeviceConfig& config, char* buf, size_t bufLen) {
-  StaticJsonDocument<kConfigJsonCapacity> doc;
+  StaticJsonDocument<kConfigJsonCapacity>& doc = g_configSerializeDoc;
+  doc.clear();
   doc["deviceId"] = config.deviceId;
   doc["deviceName"] = config.deviceName;
   if (config.hasGatewayUrl) doc["gatewayUrl"] = config.gatewayUrl;
