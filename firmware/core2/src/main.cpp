@@ -5,6 +5,8 @@
 #include <WiFi.h>
 #include <time.h>
 
+#include <cstring>
+
 #include "app/app_context.h"
 #include "app/config_store.h"
 #include "app/device_identity.h"
@@ -29,7 +31,7 @@ bool g_wifiJustSaved = false;
 uint32_t g_wifiJustSavedAtMs = 0;
 uint32_t g_lastPairingCodeRegenAtMs = 0;
 
-constexpr uint32_t kWifiConnectTimeoutMs = 15'000;
+constexpr uint32_t kWifiConnectTimeoutMs = 15000;
 constexpr uint32_t kWifiSaveRebootDelayMs = 1500;
 
 // loop() runs continuously with no inherent delay; redrawing the full
@@ -46,7 +48,7 @@ uint32_t g_lastRenderAtMs = 0;
 // connection/update-recency checks below use millis() uptime instead
 // and don't need this).
 bool ntpTimeIsPlausible() {
-  return time(nullptr) > 1'700'000'000;  // 2023-11-14, well before this project existed
+  return time(nullptr) > 1700000000;  // 2023-11-14, well before this project existed
 }
 
 void enterProvisioningMode() {
