@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { DeviceConfiguration } from "@openflightdisplay/shared-models";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { useQrScanner } from "../hooks/useQrScanner";
@@ -161,12 +161,16 @@ function PairStep({
     }
   }
 
-  if (decodedText) {
+  // Runs as an effect (not inline in the render body) so it fires exactly
+  // once per newly-decoded QR payload -- calling completePairing (which
+  // calls setState) directly during render is a React anti-pattern that
+  // can double-fire under StrictMode's dev-mode double-render.
+  useEffect(() => {
+    if (!decodedText) return;
     const parsed = parsePairingQrPayload(decodedText);
-    if (parsed && !isPairing) {
-      void completePairing(parsed.core2BaseUrl, parsed.code);
-    }
-  }
+    if (parsed) void completePairing(parsed.core2BaseUrl, parsed.code);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- completePairing is stable enough for Phase 1's scope
+  }, [decodedText]);
 
   return (
     <div>

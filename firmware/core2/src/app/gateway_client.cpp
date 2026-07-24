@@ -12,6 +12,16 @@ namespace ofd::app {
 namespace {
 WebSocketsClient g_ws;
 
+// GatewayClient::begin() is only ever called once, against the single
+// global AppContext (see main.cpp). Storing a raw pointer here (rather
+// than capturing `ctx` in the onEvent lambda below) means the callback
+// can be a capture-less lambda, which is guaranteed to convert to
+// whatever function-pointer-or-std::function type onEvent() expects --
+// some versions of Links2004/WebSockets take a plain C function pointer,
+// which a *capturing* lambda cannot bind to. This sidesteps needing to
+// know which one without a compiler to check.
+AppContext* g_ctx = nullptr;
+
 // Splits "ws://host:port/path" (the only scheme the Core2 ever dials --
 // see docs/ARCHITECTURE.md on why wss:// isn't attempted from firmware)
 // into its parts. Returns false on anything else.
@@ -87,6 +97,8 @@ void handleServerMessage(AppContext& ctx, const uint8_t* payload, size_t len) {
 }  // namespace
 
 void GatewayClient::begin(AppContext& ctx) {
+  g_ctx = &ctx;
+
   if (!ctx.hasConfig || !ctx.config.hasGatewayUrl || !ctx.hasPairingToken) {
     ctx.gatewayState = GatewayConnectionState::Unconfigured;
     return;
@@ -105,7 +117,9 @@ void GatewayClient::begin(AppContext& ctx) {
 
   g_ws.begin(host, port, path);
   g_ws.setReconnectInterval(1000);  // library handles backoff internally; see docs/PROTOCOL.md for policy intent
-  g_ws.onEvent([&ctx](WStype_t type, uint8_t* payload, size_t len) {
+  g_ws.onEvent([](WStype_t type, uint8_t* payload, size_t len) {
+    if (g_ctx == nullptr) return;
+    AppContext& ctx = *g_ctx;
     switch (type) {
       case WStype_CONNECTED: {
         ctx.gatewayState = GatewayConnectionState::Connected;

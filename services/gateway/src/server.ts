@@ -24,13 +24,11 @@ export async function buildApp(env: GatewayEnv, logger: Logger, deviceStore: Dev
   const provider = createProvider(env);
   const poller = new Poller(provider, deviceStore, logger);
 
-  const websocket = registerAircraftWebsocket(app, { deviceStore, poller, logger });
-  registerDeviceRoutes(app, { deviceStore, logger });
-  registerStatusRoute(app, { poller, websocket });
-
   // Tighter rate limit specifically on the pairing/claim endpoint since a
   // brute-force attempt against it is the highest-value target on the LAN
-  // (docs/SECURITY_AND_PRIVACY.md).
+  // (docs/SECURITY_AND_PRIVACY.md). This MUST be registered before the
+  // routes it targets -- Fastify's onRoute hook only fires for routes
+  // registered after the hook itself, not retroactively.
   app.addHook("onRoute", (routeOptions) => {
     if (routeOptions.url === "/api/v1/devices/:deviceId/claim" && routeOptions.method === "POST") {
       routeOptions.config = {
@@ -39,6 +37,10 @@ export async function buildApp(env: GatewayEnv, logger: Logger, deviceStore: Dev
       };
     }
   });
+
+  const websocket = registerAircraftWebsocket(app, { deviceStore, poller, logger });
+  registerDeviceRoutes(app, { deviceStore, logger });
+  registerStatusRoute(app, { poller, websocket });
 
   return { app, poller };
 }

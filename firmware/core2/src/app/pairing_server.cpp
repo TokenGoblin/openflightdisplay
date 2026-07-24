@@ -76,8 +76,17 @@ const char* gatewayStateToString(GatewayConnectionState s) {
 }  // namespace
 
 void registerPairingRoutes(AsyncWebServer& server, AppContext& ctx) {
+  // NOTE (unverified without hardware): whether ESPAsyncWebServer invokes
+  // the onBody callback at all for a genuinely empty (Content-Length: 0)
+  // POST varies by version. A deliberate choice was made NOT to also
+  // handle that case in the onRequest callback below, since doing so
+  // risks a double request->send() (undefined behavior in this framework)
+  // if onBody *does* still fire with total==0. Worst case today: a
+  // malformed empty-body request hangs until the client's own timeout,
+  // rather than crashing. Revisit once this is buildable against the
+  // real library.
   server.on(
-      "/pair", HTTP_POST, [](AsyncWebServerRequest* request) { /* handled in onBody below */ }, nullptr,
+      "/pair", HTTP_POST, [](AsyncWebServerRequest* request) { /* response sent from onBody below */ }, nullptr,
       [&ctx](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
         if (index == 0) {
           if (total >= kBodyBufferCapacity) {
