@@ -1,3 +1,9 @@
+// Verified needed on real hardware/testing: nothing was ever loading
+// .env into process.env -- loadEnv() reads process.env directly, so the
+// gateway had been silently defaulting to AVIATION_PROVIDER=mock this
+// entire session regardless of what .env said. Must be the first import
+// so it runs before loadEnv() is called below.
+import "dotenv/config";
 import { loadEnv } from "./config/env.js";
 import { createLogger } from "./lib/logger.js";
 import { DeviceStore } from "./lib/deviceStore.js";

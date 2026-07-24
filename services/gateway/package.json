@@ -16,6 +16,7 @@
     "@fastify/websocket": "^10.0.1",
     "@openflightdisplay/protocol": "*",
     "@openflightdisplay/shared-models": "*",
+    "dotenv": "^16.4.5",
     "fastify": "^4.28.1",
     "pino": "^9.3.2",
     "ws": "^8.18.0",
