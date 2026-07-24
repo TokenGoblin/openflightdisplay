@@ -20,9 +20,9 @@ pio run -e core2 -t upload -t monitor   # flash + serial monitor (needs a connec
 pio test -e native         # run domain-logic unit tests on your host machine -- no hardware needed
 ```
 
-## Known limitation for this session
+## Status
 
-This firmware was written and reviewed but **not compiled or flashed** — the sandbox that produced it had no PlatformIO installation. Library names/versions in `platformio.ini` are believed current but unverified against the registry. Run `pio test -e native` yourself first (fastest feedback, no hardware) and see `docs/TEST_PLAN.md` for the full manual hardware-validation checklist before flashing a real device.
+Both `pio test -e native` (34/34 domain-logic tests pass) and `pio run -e core2` (the real ESP32 target — builds and links successfully: 19.0% flash, 1.2% RAM) have been run and verified in this repo's history. Library versions in `platformio.ini` are confirmed resolvable against the registry as of that build. **Not verified:** this firmware has never been flashed to or run on physical hardware — see `docs/TEST_PLAN.md`'s manual hardware-validation checklist before flashing a real device.
 
 ## Why domain/ and app/ are split
 

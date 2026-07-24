@@ -26,6 +26,6 @@ npm run typecheck
 npm run test           # vitest run
 ```
 
-## Known limitation for this session
+## Status
 
-Written and reviewed but not executed or built — no Node.js in this session's sandbox. Playwright end-to-end tests and real camera/WebSocket behavior are unverified; see `docs/TEST_PLAN.md`.
+`npm test` passes (19/19 across 5 suites), `npm run typecheck` is clean, and `npm run build` produces a working production bundle + service worker. Not covered: Playwright end-to-end tests (no browser-automation tool available this session) and real camera/WebSocket behavior on an actual device -- see `docs/TEST_PLAN.md`.

@@ -29,6 +29,6 @@ See `openapi.yaml` for the full REST contract and `docs/PROTOCOL.md` for the Web
 
 Set `AVIATION_PROVIDER` in `.env` to `mock`, `replay`, or `adsblol`. See `docs/PROVIDER_ADAPTERS.md` before enabling `adsblol` against the real network — re-verify its current endpoint/rate-limit documentation first (flagged as unverified in this session, see `docs/DATA_SOURCE_EVALUATION.md`).
 
-## Known limitation for this session
+## Status
 
-This code was written and reviewed but not executed — the sandbox that produced it had no Node.js installed. Run `npm install && npm test` yourself before trusting it; see `docs/TEST_PLAN.md`.
+`npm test` passes (25/25 across 5 suites), `npm run typecheck` and `npm run build` are clean, and `npx eslint` reports no issues. Not covered: behavior against the real adsb.lol network (tests use the mock/replay providers and fixture data only) or multi-client load.

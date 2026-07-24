@@ -1,6 +1,6 @@
 # Core2 Hardware Notes
 
-**No physical M5Stack Core2 was available during this implementation session.** Every number and claim below is either from the publicly documented M5Stack Core2 hardware spec or an engineering estimate, and is marked accordingly. Re-verify against real hardware before treating any of this as ground truth — see `docs/TEST_PLAN.md`'s manual hardware validation checklist.
+**No physical M5Stack Core2 was available during this implementation session.** The firmware has since been built for real (`pio run -e core2` succeeds — see the memory budget table below for actual reported numbers), so the code is confirmed well-formed and within resource budget at *build* time. Nothing about *runtime* behavior (display output, touch, Wi-Fi timing, real heap usage under continuous operation) has been verified — that still requires physical hardware. See `docs/TEST_PLAN.md`'s manual hardware validation checklist.
 
 ## Target hardware (per M5Stack's published spec — not independently re-verified here)
 
@@ -15,18 +15,20 @@
 
 TLS (HTTPS) client connections on plain ESP32 (no PSRAM) typically need on the order of tens of KB of heap for the mbedTLS handshake and session buffers, on top of whatever the application and networking stack are already using. Without confirmed PSRAM, that's a real risk for a device meant to run continuously for weeks. This is the concrete reason `docs/ARCHITECTURE.md` puts all HTTPS provider polling in the gateway and keeps the Core2 talking plain WebSocket/HTTP on the LAN only.
 
-## Estimated memory budget (Phase 1 firmware — unverified without a real build)
+## Memory budget
 
-| Component | Estimate | Confidence |
+Real numbers from `pio run -e core2` (espressif32 platform 7.0.1, M5Unified 0.1.17, M5GFX 0.2.26, ArduinoJson 6.21.6, WebSockets 2.7.3, ESPAsyncWebServer 3.11.2, AsyncTCP 3.5.0, QRCode 0.0.1), default partition table:
+
+| Metric | Value | Confidence |
 |---|---|---|
-| Firmware binary (Arduino core + M5Unified/LovyanGFX + ESPAsyncWebServer/AsyncTCP + ArduinoJson + WS client + QRCode lib) | ~1.2-1.6MB flash | Rough estimate based on typical library sizes; confirm with `pio run -e core2` binary size output once buildable |
-| LittleFS partition for config | 64-256KB reserved | Config JSON itself is a few KB; partition sized generously for headroom and future OTA-adjacent needs |
-| Network buffers (WS client + AsyncWebServer) | A few KB per connection | Standard for these libraries |
-| Parsed aircraft array | Fixed-capacity `ArduinoJson` document sized for ≤10 `AircraftState` records (bounded per `docs/PROTOCOL.md`) | Bounded by design, not by measurement yet |
-| Display buffers | Depends on LovyanGFX's chosen buffering mode (full-frame vs. partial/sprite) — Phase 1 uses partial-region redraws, not a full 320×240 16-bit framebuffer (~150KB), to reduce heap pressure | Needs confirmation against real free-heap readings |
+| Flash used | 1,243,813 bytes (19.0% of 6,553,600 available to the app partition) | **Measured** — real build output |
+| RAM used (static, at boot) | 55,184 bytes (1.2% of 4,521,984 bytes) | **Measured** — real build output. This is static/global data only, not a runtime heap-usage measurement |
+| Parsed aircraft array | Fixed-capacity `ArduinoJson` `StaticJsonDocument<4096>` for the WS aircraft-update message (≤10 `AircraftState` records, bounded per `docs/PROTOCOL.md`) | Bounded by design; the 4096 capacity is an engineering estimate not yet cross-checked against ArduinoJson's capacity-assistant tool |
+| Config JSON documents | `StaticJsonDocument<512>` for device config, `StaticJsonDocument<160>` for Wi-Fi credentials/pairing token | Bounded by design |
+| Display buffers | Depends on LovyanGFX's chosen buffering mode (full-frame vs. partial/sprite) — Phase 1 uses partial-region redraws, not a full 320×240 16-bit framebuffer (~150KB), to reduce heap pressure | Compiles; actual runtime heap headroom during rendering is unmeasured |
 | OTA partition | Not used in Phase 1 (OTA is Phase 5) — default single-app partition table for now | — |
 
-**Action item for whoever has hardware:** build with `pio run -e core2`, note the reported flash/RAM usage, then run with `ESP.getFreeHeap()` logged periodically over at least a few hours, and update this table with real numbers.
+**Still needed from whoever has hardware:** flash it, then log `ESP.getFreeHeap()` periodically over at least a few hours of continuous operation with the gateway actually feeding it data — the numbers above confirm the binary fits and links, not that it behaves well under sustained runtime load (WebSocket reconnects, repeated JSON parsing, display redraws).
 
 ## Display library choice
 

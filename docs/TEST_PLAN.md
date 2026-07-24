@@ -2,7 +2,9 @@
 
 ## Honesty note (read this first)
 
-This Phase 1 implementation session had `git` available but no working `node`/`npm`, `platformio`, `python`, or `g++` toolchain in the sandbox. Every test file listed below was **written and manually reviewed**, but **none were executed in this session**. Nothing here is claimed as "passing" from this session — only "present, and expected to pass once run." Run the commands in each section yourself (or let the CI workflows in `.github/workflows` run them) before trusting this code.
+This Phase 1 implementation session started with `git` available but no working `node`/`npm`, `platformio`, `python`, or `g++` toolchain in the sandbox — the code below was initially written and only manually reviewed. Node.js, Python, PlatformIO, and a MinGW-w64 GCC toolchain were then installed mid-session (via `winget`/`pip`), and **every test suite and build listed below has since actually been run**, with real bugs found and fixed along the way (see the git log for the detailed list — TS project-reference config, `exactOptionalPropertyTypes` fallout, a Fastify option that didn't exist, a flaky WS test timing race, PlatformIO's `test_build_src` requirement, Unity's double-precision flag, C++14 digit separators that broke under the ESP32 toolchain, and a couple of missing includes).
+
+Current status: **all 99 automated tests pass** (protocol 10, shared-models 11, gateway 25, tablet-pwa 19, firmware native 34), typecheck/lint/build are clean across every TypeScript workspace, and the real ESP32 firmware target (`pio run -e core2`) builds and links successfully. What's **still not verified** is physical-hardware runtime behavior (see "Manual/hardware validation" below) and Playwright end-to-end tests (no browser-automation tool was available even after installing the rest of the toolchain).
 
 ## Firmware tests (`firmware/core2/test/native`)
 
@@ -13,6 +15,8 @@ Run with:
 cd firmware/core2
 pio test -e native
 ```
+
+All 34 test cases across the 6 suites below pass.
 
 Covered in Phase 1:
 - Haversine distance and bearing calculation, including degenerate cases (same point, antipodal-ish points).
@@ -33,6 +37,8 @@ npm install
 npm test
 ```
 
+All 25 tests across 5 suites pass.
+
 Covered in Phase 1:
 - Mock provider normalization → `AircraftState[]` shape and required-field validation.
 - Replay provider: deterministic playback of a fixture file.
@@ -52,6 +58,8 @@ cd apps/tablet-pwa
 npm install
 npm test
 ```
+
+All 19 tests across 5 suites pass.
 
 Covered in Phase 1:
 - Setup-wizard step transitions (pairing → location → radius → confirm), including manual-entry and mocked-geolocation paths.
@@ -83,7 +91,7 @@ Explicitly **not** included yet (Phase 5): signed release artifacts, hardware-in
 
 ## Manual/hardware validation (required before calling Phase 1 "hardware-verified")
 
-None of this was performed in this session — it requires a physical M5Stack Core2. Documented here so whoever has the hardware knows exactly what to check:
+None of this was performed in this session — it requires a physical M5Stack Core2, and the firmware, while it now builds and links successfully (`pio run -e core2`, see `docs/CORE2_HARDWARE.md` for real flash/RAM figures), has never actually run on a device. Documented here so whoever has the hardware knows exactly what to check:
 
 1. Flash firmware (`pio run -e core2 -t upload`), confirm boot screen appears.
 2. Confirm SoftAP + captive portal appears when no Wi-Fi is configured; enter real credentials; confirm it connects and persists across a power cycle.

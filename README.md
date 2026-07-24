@@ -6,7 +6,7 @@ OpenFlightDisplay is an **original implementation**, inspired by the general "ho
 
 > **Status: Phase 1 vertical slice.** This is a narrow, end-to-end working slice (Wi-Fi provisioning, pairing, one live data provider, single-aircraft display) — not the full feature set described in `docs/PRODUCT_REQUIREMENTS.md`. See `docs/FEATURE_PARITY_MATRIX.md` for what's done vs. planned, and `docs/IMPLEMENTATION_PLAN.md` for the phased roadmap.
 >
-> **This code was written in a sandbox with no Node.js, PlatformIO, or C++ compiler available.** Everything below was written and carefully reviewed but not executed. See "Known limitations" below and `docs/TEST_PLAN.md` before trusting any of it.
+> **All 99 automated tests pass** (protocol 10, shared-models 11, gateway 25, tablet-pwa 19, firmware native 34), every TypeScript workspace typechecks/lints/builds cleanly, and the real ESP32 firmware target builds and links successfully. This code started out written-but-unexecuted (the initial sandbox had no Node.js/PlatformIO/C++ compiler), but Node, Python, PlatformIO, and a MinGW toolchain were installed mid-session and everything above has since actually been run, with several real bugs found and fixed in the process. What's still unverified: running on physical Core2 hardware, and Playwright end-to-end tests. See "Known limitations" below and `docs/TEST_PLAN.md`.
 
 ## Product overview
 
@@ -86,11 +86,10 @@ Local-first, no mandatory account, no telemetry/ads/analytics SDKs anywhere. You
 
 ## Known limitations (read before flashing hardware or deploying)
 
-- **Nothing in this repository has been compiled, installed, or run.** The session that wrote it had `git` but no Node.js, npm, PlatformIO, or C++ compiler. Run the test suites yourself (see `docs/TEST_PLAN.md`) before trusting any component.
+- **No physical M5Stack Core2 was available.** The firmware builds and links successfully for the real board (`pio run -e core2` — see `docs/CORE2_HARDWARE.md` for actual flash/RAM figures), but has never been flashed or run. Display output, touch, Wi-Fi timing, and real heap behavior under continuous operation are all unverified — see `docs/TEST_PLAN.md`'s manual hardware-validation checklist.
+- No Playwright/browser-automation tool was available in this session, so there are no end-to-end browser tests yet (unit/component tests via Vitest + React Testing Library do exist and pass).
 - The `adsb.lol` adapter's exact endpoint path is a best-effort implementation based on the common tar1090-derived API convention — re-verify against `https://api.adsb.lol/docs` before relying on it.
-- Firmware library versions in `firmware/core2/platformio.ini` are believed current but unverified against the PlatformIO registry.
 - Only Phase 1 features are implemented; see `docs/FEATURE_PARITY_MATRIX.md` for the full breakdown of what's done, planned, or future.
-- No physical M5Stack Core2 was available — every hardware-specific claim in `docs/CORE2_HARDWARE.md` is marked as estimated or unverified.
 
 ## Troubleshooting
 
