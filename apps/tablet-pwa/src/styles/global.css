@@ -1,0 +1,44 @@
+:root {
+  color-scheme: dark;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: #0b1220;
+  color: #eef3fb;
+}
+
+button {
+  font: inherit;
+  padding: 0.4rem 0.8rem;
+  margin: 0.25rem 0.25rem 0.25rem 0;
+  border-radius: 6px;
+  border: 1px solid #3ecfd8;
+  background: transparent;
+  color: #eef3fb;
+  cursor: pointer;
+}
+
+button[aria-pressed="true"] {
+  background: #3ecfd8;
+  color: #0b1220;
+}
+
+input {
+  font: inherit;
+  display: block;
+  width: 100%;
+  margin: 0.25rem 0 0.75rem;
+  padding: 0.4rem;
+  border-radius: 6px;
+  border: 1px solid #9fb0c8;
+  background: #141d2e;
+  color: #eef3fb;
+  box-sizing: border-box;
+}
+
+label {
+  display: block;
+  margin-top: 0.5rem;
+}

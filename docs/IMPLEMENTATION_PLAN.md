@@ -55,7 +55,7 @@ Acceptance criteria: `docs/PRODUCT_REQUIREMENTS.md` § "Phase 1 vertical-slice a
 - Long-duration (multi-day) continuous-operation testing, memory profiling, load testing.
 - API-key management UX; config import/export.
 - Accessibility audit; localization foundation.
-- Signed release artifacts and a documented release process (`docs/RELEASE_PROCESS.md`).
+- Signed release artifacts and a documented release process (a `docs/RELEASE_PROCESS.md` will be written at that point).
 
 ## Explicit non-goal for every phase
 

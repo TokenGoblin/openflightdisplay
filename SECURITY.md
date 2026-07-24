@@ -22,6 +22,6 @@ Out of scope:
 
 ## Supported versions
 
-This project is pre-1.0. Only the `main` branch receives security fixes until a stable release process exists (see `docs/RELEASE_PROCESS.md`).
+This project is pre-1.0. Only the `main` branch receives security fixes until a stable release process exists (a `docs/RELEASE_PROCESS.md` will document it once Phase 5 defines one).
 
 See `docs/SECURITY_AND_PRIVACY.md` for the full threat model, data-handling policy, and dependency-update policy.

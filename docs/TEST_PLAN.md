@@ -79,7 +79,7 @@ Fixtures are synthetic/sanitized — no real registrations tied to identifiable 
 - `pwa.yml` — `npm ci`, lint, typecheck, `npm test`, `npm run build`.
 - `protocol-typecheck.yml` — typechecks `packages/shared-models` and `packages/protocol` in isolation, since both `services/gateway` and `apps/tablet-pwa` depend on them.
 
-Explicitly **not** included yet (Phase 5): signed release artifacts, hardware-in-the-loop flashing, long-duration soak tests. See `docs/RELEASE_PROCESS.md`.
+Explicitly **not** included yet (Phase 5): signed release artifacts, hardware-in-the-loop flashing, long-duration soak tests. A `docs/RELEASE_PROCESS.md` will be written when that phase starts.
 
 ## Manual/hardware validation (required before calling Phase 1 "hardware-verified")
 
