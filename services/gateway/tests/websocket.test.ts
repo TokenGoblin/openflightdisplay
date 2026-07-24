@@ -58,9 +58,14 @@ describe("WS /ws/v1/aircraft", () => {
   });
 
   it("delivers a versioned aircraft-update message to a validly authenticated client", async () => {
+    // The WS client connects after the poller's immediate first poll (in
+    // start()) has already fired with no socket listening yet, so this
+    // has to wait a full MockProvider.pollIntervalMs (5000ms) for the
+    // next tick -- the wait window here must be comfortably longer than
+    // that, not equal to it (a 5000/5000 tie was intermittently losing).
     const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/v1/aircraft?deviceId=core2-abc123&token=tok-1`);
     const message = await new Promise<Record<string, unknown>>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error("timed out waiting for aircraft-update")), 5000);
+      const timeout = setTimeout(() => reject(new Error("timed out waiting for aircraft-update")), 7500);
       ws.on("message", (data) => {
         const parsed = JSON.parse(data.toString());
         if (parsed.type === "aircraft-update") {

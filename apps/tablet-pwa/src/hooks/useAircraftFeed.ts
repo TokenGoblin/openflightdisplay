@@ -85,9 +85,15 @@ export function useAircraftFeed(
         if (parsed.type === "aircraft-update") {
           setState((s) => ({ ...s, aircraft: parsed.aircraft, lastUpdatedAt: new Date(parsed.generatedAt) }));
         } else if (parsed.type === "provider-status") {
+          // exactOptionalPropertyTypes means `message` must be either
+          // present-with-a-value or absent, never explicitly `undefined`.
           setState((s) => ({
             ...s,
-            providerStatus: { provider: parsed.provider, status: parsed.status, message: parsed.message },
+            providerStatus: {
+              provider: parsed.provider,
+              status: parsed.status,
+              ...(parsed.message !== undefined && { message: parsed.message }),
+            },
           }));
         }
         // heartbeat: no state change needed, lastMessageAt already bumped above

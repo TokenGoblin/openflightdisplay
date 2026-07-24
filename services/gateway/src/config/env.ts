@@ -2,7 +2,9 @@ import { z } from "zod";
 
 const EnvSchema = z.object({
   AVIATION_PROVIDER: z.enum(["mock", "replay", "adsblol"]).default("mock"),
-  PORT: z.coerce.number().int().min(1).max(65535).default(8787),
+  // PORT=0 is valid and means "ask the OS for any free ephemeral port" --
+  // used by tests that spin up a real server on an unpredictable port.
+  PORT: z.coerce.number().int().min(0).max(65535).default(8787),
   HOST: z.string().min(1).default("0.0.0.0"),
   REPLAY_FIXTURE_PATH: z.string().default("tests/fixtures/one-commercial-aircraft.json"),
   ADSBLOL_API_KEY: z.string().optional(),

@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "description": "Open-source aircraft-tracking display system for M5Stack Core2 and tablet PWA",
   "license": "MIT",
+  "type": "module",
   "workspaces": [
     "packages/*",
     "services/gateway",
@@ -21,6 +22,7 @@
   "devDependencies": {
     "@eslint/js": "^9.9.0",
     "eslint": "^9.9.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
     "typescript-eslint": "^8.1.0"
   }
 }

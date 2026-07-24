@@ -16,7 +16,11 @@ export interface BuildAppResult {
 }
 
 export async function buildApp(env: GatewayEnv, logger: Logger, deviceStore: DeviceStore): Promise<BuildAppResult> {
-  const app = Fastify({ loggerInstance: logger });
+  // Fastify's own request logger is left at its default (off) -- every
+  // route/module in this app takes the `logger` (our pino instance, with
+  // secret redaction configured) as an explicit dependency instead, so
+  // there's no need to wire a custom instance into Fastify itself here.
+  const app = Fastify();
 
   await app.register(fastifyRateLimit, { global: true, max: 100, timeWindow: "1 minute" });
   await app.register(fastifyWebsocket);

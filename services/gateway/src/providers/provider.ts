@@ -20,9 +20,13 @@ export class ProviderFetchError extends Error {
   constructor(
     public readonly providerId: string,
     message: string,
-    public readonly cause?: unknown,
+    cause?: unknown,
   ) {
-    super(`[${providerId}] ${message}`);
+    // `cause` is a real Error.cause (ES2022), passed via the standard
+    // options bag -- redeclaring it as a parameter property here instead
+    // would conflict with the base class's own `cause` and require an
+    // `override` modifier for no benefit.
+    super(`[${providerId}] ${message}`, cause !== undefined ? { cause } : undefined);
     this.name = "ProviderFetchError";
   }
 }

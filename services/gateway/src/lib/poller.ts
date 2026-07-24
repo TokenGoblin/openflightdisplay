@@ -87,7 +87,11 @@ export class Poller extends EventEmitter {
     if (status === "ok") this.#consecutiveFailures = 0;
     if (status === this.#lastStatus) return;
     this.#lastStatus = status;
-    const event: ProviderStatusEvent = { providerId: this.#provider.id, status, message };
+    // exactOptionalPropertyTypes (tsconfig.base.json) means an optional
+    // property must be either present-with-a-value or absent -- never
+    // explicitly set to `undefined` -- so build the object conditionally
+    // rather than always including `message`.
+    const event: ProviderStatusEvent = { providerId: this.#provider.id, status, ...(message !== undefined && { message }) };
     this.emit("provider-status", event);
   }
 
@@ -95,7 +99,7 @@ export class Poller extends EventEmitter {
     return {
       id: this.#provider.id,
       status: this.#lastStatus,
-      lastSuccessfulPollAt: this.#lastSuccessfulPollAt,
+      ...(this.#lastSuccessfulPollAt !== undefined && { lastSuccessfulPollAt: this.#lastSuccessfulPollAt }),
     };
   }
 }

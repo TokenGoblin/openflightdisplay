@@ -10,7 +10,12 @@ const COLOR_BY_STATUS: Record<StatusKind, string> = {
   "showing-aircraft": "#3ecf7f",
 };
 
-export function StatusBanner({ status, detail }: { status: StatusKind; detail?: string }) {
+// `detail?: string | undefined` (not just `detail?: string`) is deliberate:
+// under exactOptionalPropertyTypes, callers commonly pass a possibly-
+// undefined value via JSX (e.g. `detail={feed.providerStatus?.message}`),
+// which is exactly the "present with value undefined" case that a bare
+// `detail?: string` would reject.
+export function StatusBanner({ status, detail }: { status: StatusKind; detail?: string | undefined }) {
   if (status === "showing-aircraft") return null;
 
   return (
