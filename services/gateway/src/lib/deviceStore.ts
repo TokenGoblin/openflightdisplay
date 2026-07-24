@@ -25,6 +25,14 @@ export class DeviceStore {
   #path: string;
   #logger: Logger;
   #devices: Map<string, DeviceRecord> = new Map();
+  // Verified needed on real hardware/testing: a burst of rapid WebSocket
+  // reconnects (several within 2ms of each other) triggered overlapping
+  // calls to persist() -- two concurrent writes both tried to rename the
+  // *same* temp path, and the second one failed with ENOENT because the
+  // first had already consumed it. Chaining every write onto this queue
+  // makes them run strictly one at a time, in order, regardless of how
+  // many callers ask for a write concurrently.
+  #writeQueue: Promise<void> = Promise.resolve();
 
   constructor(path: string, logger: Logger) {
     this.#path = path;
@@ -48,13 +56,22 @@ export class DeviceStore {
     }
   }
 
-  private async persist(): Promise<void> {
+  private async doPersist(): Promise<void> {
     const obj: StoreFile = Object.fromEntries(this.#devices);
     const dir = dirname(this.#path);
     await mkdir(dir, { recursive: true });
     const tmpPath = `${this.#path}.tmp`;
     await writeFile(tmpPath, JSON.stringify(obj, null, 2), "utf-8");
     await rename(tmpPath, this.#path);
+  }
+
+  private persist(): Promise<void> {
+    const task = this.#writeQueue.then(() => this.doPersist());
+    // Keep the queue itself always-resolving so one failed write doesn't
+    // permanently wedge every write after it -- but `task` (what the
+    // caller actually gets back) still rejects if *this* write failed.
+    this.#writeQueue = task.catch(() => {});
+    return task;
   }
 
   get(deviceId: string): DeviceRecord | undefined {

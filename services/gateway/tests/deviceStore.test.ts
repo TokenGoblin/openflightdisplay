@@ -79,4 +79,30 @@ describe("DeviceStore", () => {
     await reloaded.load();
     expect(reloaded.get("core2-abc123")?.config.deviceName).toBe("Living Room");
   });
+
+  it("survives a burst of concurrent writes without any of them rejecting", async () => {
+    // Verified needed on real hardware: a burst of rapid WebSocket
+    // reconnects fired several overlapping touchLastSeen() calls (no
+    // await between them, matching how aircraftSocket.ts calls it from
+    // each new connection), and two concurrent persist() calls raced on
+    // the same temp file -- the second's rename() failed with ENOENT
+    // because the first had already consumed it. That rejection was
+    // unhandled at the fire-and-forget call site, which crashed the
+    // entire gateway process (Node terminates on unhandled rejections by
+    // default).
+    const store = new DeviceStore(storePath, logger);
+    await store.load();
+    await store.claim("core2-abc123", "token-1", {
+      deviceId: "core2-abc123",
+      deviceName: "Living Room",
+      displayProfile: { mode: "single-aircraft", brightness: 200, units: "metric", use24HourClock: true },
+    });
+
+    const burst = Array.from({ length: 20 }, (_, i) => store.touchLastSeen("core2-abc123", new Date(2026, 0, 1, 0, 0, i)));
+    await expect(Promise.all(burst)).resolves.not.toThrow();
+
+    const reloaded = new DeviceStore(storePath, logger);
+    await reloaded.load();
+    expect(reloaded.get("core2-abc123")?.lastSeenAt).toBeDefined();
+  });
 });

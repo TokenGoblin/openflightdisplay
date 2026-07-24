@@ -89,7 +89,17 @@ export function registerAircraftWebsocket(app: FastifyInstance, deps: Deps): Air
       socketsByDevice.set(deviceId, sockets);
     }
     sockets.add(socket);
-    void deviceStore.touchLastSeen(deviceId, new Date());
+    // Verified needed on real hardware: this is fire-and-forget (a
+    // best-effort timestamp, not worth blocking the connection on), but
+    // an unhandled rejection here previously crashed the entire gateway
+    // process outright (Node terminates on unhandled rejections by
+    // default) when persist() failed during a burst of rapid reconnects.
+    // The race itself is now fixed in DeviceStore, but this is worth
+    // keeping regardless -- "last seen" failing to save should never be
+    // able to take down the whole process.
+    deviceStore.touchLastSeen(deviceId, new Date()).catch((err) => {
+      logger.warn({ err, deviceId }, "failed to update device last-seen timestamp");
+    });
     logger.info({ deviceId }, "WS client connected");
 
     socket.on("close", () => {
