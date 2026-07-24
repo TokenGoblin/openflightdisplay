@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import fastifyWebsocket from "@fastify/websocket";
 import fastifyRateLimit from "@fastify/rate-limit";
+import fastifyCors from "@fastify/cors";
 import type { GatewayEnv } from "./config/env.js";
 import type { Logger } from "./lib/logger.js";
 import type { DeviceStore } from "./lib/deviceStore.js";
@@ -22,6 +23,19 @@ export async function buildApp(env: GatewayEnv, logger: Logger, deviceStore: Dev
   // there's no need to wire a custom instance into Fastify itself here.
   const app = Fastify();
 
+  // CORS: verified needed on real hardware -- the PWA (its own dev
+  // server or static host origin) and the gateway are always different
+  // origins from the browser's perspective (different port at minimum),
+  // so every cross-origin fetch() from the PWA was silently blocked
+  // before this, surfacing only as a generic "network error" with no
+  // indication it was a CORS problem. `origin: true` reflects whatever
+  // origin made the request -- appropriate for a LAN-only tool with no
+  // sensitive cross-site exposure (see docs/SECURITY_AND_PRIVACY.md).
+  await app.register(fastifyCors, {
+    origin: true,
+    methods: ["GET", "POST", "PUT", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  });
   await app.register(fastifyRateLimit, { global: true, max: 100, timeWindow: "1 minute" });
   await app.register(fastifyWebsocket);
 
