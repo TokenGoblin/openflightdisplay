@@ -1,0 +1,61 @@
+{
+  "frames": [
+    [
+      {
+        "provider": "replay",
+        "icaoHex": "a1b2c3",
+        "callsign": "UAL456",
+        "aircraftTypeCode": "B738",
+        "aircraftCategory": "fixed-wing",
+        "latitude": 47.62,
+        "longitude": -122.31,
+        "geometricAltitudeFt": 11000,
+        "groundSpeedKt": 280,
+        "trackHeadingDeg": 90,
+        "emergencyState": "none",
+        "onGround": false,
+        "firstSeen": "2026-07-24T12:00:00.000Z",
+        "lastSeen": "2026-07-24T12:00:05.000Z",
+        "positionTimestamp": "2026-07-24T12:00:05.000Z",
+        "dataQualityFlags": []
+      },
+      {
+        "provider": "replay",
+        "icaoHex": "d4e5f6",
+        "callsign": "N789GH",
+        "aircraftTypeCode": "R44",
+        "aircraftCategory": "rotorcraft",
+        "latitude": 47.605,
+        "longitude": -122.305,
+        "geometricAltitudeFt": 900,
+        "groundSpeedKt": 90,
+        "trackHeadingDeg": 200,
+        "emergencyState": "none",
+        "onGround": false,
+        "firstSeen": "2026-07-24T12:00:00.000Z",
+        "lastSeen": "2026-07-24T12:00:05.000Z",
+        "positionTimestamp": "2026-07-24T12:00:05.000Z",
+        "dataQualityFlags": []
+      },
+      {
+        "provider": "replay",
+        "icaoHex": "112233",
+        "callsign": "RESCUE1",
+        "aircraftTypeCode": "C172",
+        "aircraftCategory": "fixed-wing",
+        "latitude": 47.615,
+        "longitude": -122.29,
+        "geometricAltitudeFt": 4500,
+        "groundSpeedKt": 120,
+        "trackHeadingDeg": 15,
+        "squawk": "7700",
+        "emergencyState": "general",
+        "onGround": false,
+        "firstSeen": "2026-07-24T12:00:00.000Z",
+        "lastSeen": "2026-07-24T12:00:05.000Z",
+        "positionTimestamp": "2026-07-24T12:00:05.000Z",
+        "dataQualityFlags": []
+      }
+    ]
+  ]
+}

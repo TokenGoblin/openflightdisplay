@@ -1,0 +1,24 @@
+{
+  "frames": [
+    [
+      {
+        "provider": "replay",
+        "icaoHex": "a1b2c3",
+        "callsign": "STALE01",
+        "aircraftTypeCode": "B738",
+        "aircraftCategory": "fixed-wing",
+        "latitude": 47.62,
+        "longitude": -122.31,
+        "geometricAltitudeFt": 11000,
+        "groundSpeedKt": 280,
+        "trackHeadingDeg": 90,
+        "emergencyState": "none",
+        "onGround": false,
+        "firstSeen": "2026-07-24T11:50:00.000Z",
+        "lastSeen": "2026-07-24T11:50:05.000Z",
+        "positionTimestamp": "2026-07-24T11:50:05.000Z",
+        "dataQualityFlags": ["stale-position"]
+      }
+    ]
+  ]
+}

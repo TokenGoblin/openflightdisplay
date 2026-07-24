@@ -1,0 +1,101 @@
+openapi: 3.0.3
+info:
+  title: OpenFlightDisplay Gateway API
+  version: "1"
+  description: >
+    REST contract for the OpenFlightDisplay gateway. See docs/PROTOCOL.md
+    for the full protocol spec including the WebSocket feed, which is not
+    representable in OpenAPI. Every payload also carries a "schemaVersion"
+    field (currently 1).
+servers:
+  - url: http://{host}:{port}
+    variables:
+      host:
+        default: localhost
+      port:
+        default: "8787"
+paths:
+  /api/v1/devices/{deviceId}/claim:
+    post:
+      summary: Register a device + pairing token with the gateway
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [schemaVersion, deviceId, deviceName, pairingToken]
+              properties:
+                schemaVersion: { type: integer, enum: [1] }
+                deviceId: { type: string }
+                deviceName: { type: string }
+                pairingToken: { type: string }
+      responses:
+        "200": { description: Claimed successfully }
+        "400": { description: Invalid request body or deviceId mismatch }
+        "409": { description: Already claimed with a different pairing token }
+  /api/v1/devices/{deviceId}/config:
+    get:
+      summary: Read a device's stored configuration
+      security: [{ pairingToken: [] }]
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Configuration returned }
+        "401": { description: Missing or invalid pairing token }
+        "404": { description: Device not found/claimed }
+    put:
+      summary: Replace a device's stored configuration
+      security: [{ pairingToken: [] }]
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [schemaVersion, config]
+              properties:
+                schemaVersion: { type: integer, enum: [1] }
+                config: { type: object, description: "DeviceConfiguration, see packages/shared-models" }
+      responses:
+        "200": { description: Configuration updated }
+        "400": { description: Invalid configuration body }
+        "401": { description: Missing or invalid pairing token }
+  /api/v1/status:
+    get:
+      summary: Gateway and active-provider health
+      responses:
+        "200":
+          description: Status returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  schemaVersion: { type: integer, enum: [1] }
+                  provider:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      status: { type: string, enum: [ok, degraded, unavailable] }
+                      lastSuccessfulPollAt: { type: string, format: date-time }
+                  connectedDevices: { type: integer }
+components:
+  securitySchemes:
+    pairingToken:
+      type: http
+      scheme: bearer
+      description: The pairing token issued when the device was claimed.
