@@ -1,0 +1,38 @@
+name: protocol-typecheck
+
+on:
+  push:
+    paths:
+      - "packages/shared-models/**"
+      - "packages/protocol/**"
+      - "packages/design-tokens/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/protocol-typecheck.yml"
+  pull_request:
+    paths:
+      - "packages/shared-models/**"
+      - "packages/protocol/**"
+      - "packages/design-tokens/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/protocol-typecheck.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - run: npm ci
+      - run: npm run typecheck --workspace @openflightdisplay/shared-models
+      - run: npm run test --workspace @openflightdisplay/shared-models
+      - run: npm run build --workspace @openflightdisplay/shared-models
+      - run: npm run typecheck --workspace @openflightdisplay/protocol
+      - run: npm run test --workspace @openflightdisplay/protocol
+      - run: npm run build --workspace @openflightdisplay/protocol
+      - run: npm run typecheck --workspace @openflightdisplay/design-tokens
+      - run: npm run build --workspace @openflightdisplay/design-tokens

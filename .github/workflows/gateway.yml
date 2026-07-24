@@ -1,0 +1,36 @@
+name: gateway
+
+on:
+  push:
+    paths:
+      - "services/gateway/**"
+      - "packages/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/gateway.yml"
+  pull_request:
+    paths:
+      - "services/gateway/**"
+      - "packages/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/gateway.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - run: npm ci
+      # Shared packages must be built before the gateway can resolve their
+      # compiled dist/ output (see package.json "exports" in each package).
+      - run: npm run build --workspace @openflightdisplay/shared-models
+      - run: npm run build --workspace @openflightdisplay/protocol
+      - run: npm run typecheck --workspace @openflightdisplay/gateway
+      - run: npm run test --workspace @openflightdisplay/gateway
+      - run: npm run build --workspace @openflightdisplay/gateway
+      - run: npx eslint services/gateway/src services/gateway/tests

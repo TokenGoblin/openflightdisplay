@@ -1,0 +1,35 @@
+name: pwa
+
+on:
+  push:
+    paths:
+      - "apps/tablet-pwa/**"
+      - "packages/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/pwa.yml"
+  pull_request:
+    paths:
+      - "apps/tablet-pwa/**"
+      - "packages/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/pwa.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - run: npm ci
+      - run: npm run build --workspace @openflightdisplay/shared-models
+      - run: npm run build --workspace @openflightdisplay/protocol
+      - run: npm run build --workspace @openflightdisplay/design-tokens
+      - run: npm run typecheck --workspace @openflightdisplay/tablet-pwa
+      - run: npm run test --workspace @openflightdisplay/tablet-pwa
+      - run: npm run build --workspace @openflightdisplay/tablet-pwa
+      - run: npx eslint apps/tablet-pwa/src apps/tablet-pwa/tests
