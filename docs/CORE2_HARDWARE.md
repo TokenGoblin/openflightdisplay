@@ -1,15 +1,16 @@
 # Core2 Hardware Notes
 
-**No physical M5Stack Core2 was available during this implementation session.** The firmware has since been built for real (`pio run -e core2` succeeds — see the memory budget table below for actual reported numbers), so the code is confirmed well-formed and within resource budget at *build* time. Nothing about *runtime* behavior (display output, touch, Wi-Fi timing, real heap usage under continuous operation) has been verified — that still requires physical hardware. See `docs/TEST_PLAN.md`'s manual hardware validation checklist.
+**A physical M5Stack Core2 was connected and used for real end-to-end testing** (full provisioning, pairing, live aircraft data from adsb.lol, gateway-down/recovery). It ran stably for the duration of that testing with no crashes remaining after the bugs below were fixed. What's still not done: a multi-day continuous-operation soak test to check for slow heap leaks, and a Wi-Fi-router-power-loss test (see `docs/TEST_PLAN.md`'s manual hardware validation checklist for exactly what's covered and what isn't).
 
-## Target hardware (per M5Stack's published spec — not independently re-verified here)
+## Target hardware (confirmed on the actual unit used for testing)
 
-- MCU: ESP32 (dual-core Xtensa LX6)
+- MCU: **ESP32-D0WDQ6 revision v3.0** (confirmed via `esptool.py`), dual-core Xtensa LX6, 240MHz
 - Display: 320×240 capacitive touchscreen (ILI9342C-family controller, driven via LovyanGFX/M5Unified)
-- Flash: 16MB
-- PSRAM: Core2 variants have shipped with and without PSRAM depending on revision/batch — **this is the single most important thing to confirm on the actual unit before assuming any RAM headroom for TLS or JSON parsing.** Do not assume PSRAM is present.
+- Flash: **16MB, confirmed**
+- PSRAM: **confirmed absent** on this specific unit (esptool's chip-feature detection listed WiFi/BT/Dual Core/240MHz/VRef-calibration but no PSRAM) — this validates the caution below about not assuming TLS/JSON-parsing headroom from PSRAM. Other Core2 units/batches may differ; don't assume this generalizes.
 - RTC, speaker, vibration motor, microSD slot (SD card is optional in this design, not required for Phase 1)
 - Wi-Fi 802.11 b/g/n; BLE (unused in Phase 1)
+- USB-serial: this unit uses a CH9102 adapter. The auto-reset sequence (RTS/DTR toggling GPIO0/EN) that's supposed to bring the board out of the bootloader after flashing did not reliably work over this cable/port combination -- a manual power-cycle was needed after every single flash in this session. If a flash "succeeds" but the board then shows "waiting for download" on serial instead of booting, this is why; try a different cable/port, or just power-cycle manually.
 
 ## Why this matters for the architecture
 
@@ -28,7 +29,7 @@ Real numbers from `pio run -e core2` (espressif32 platform 7.0.1, M5Unified 0.1.
 | Display buffers | Depends on LovyanGFX's chosen buffering mode (full-frame vs. partial/sprite) — Phase 1 uses partial-region redraws, not a full 320×240 16-bit framebuffer (~150KB), to reduce heap pressure | Compiles; actual runtime heap headroom during rendering is unmeasured |
 | OTA partition | Not used in Phase 1 (OTA is Phase 5) — default single-app partition table for now | — |
 
-**Still needed from whoever has hardware:** flash it, then log `ESP.getFreeHeap()` periodically over at least a few hours of continuous operation with the gateway actually feeding it data — the numbers above confirm the binary fits and links, not that it behaves well under sustained runtime load (WebSocket reconnects, repeated JSON parsing, display redraws).
+**Runtime behavior since this table was written:** the device ran continuously through an extended real testing session (provisioning, pairing, live aircraft data, deliberate gateway restarts, WebSocket reconnects) with no crashes remaining after fixing two real bugs found in the process -- see `docs/TEST_PLAN.md` for the full list, but the significant one for this table specifically was a genuine stack overflow in the WebSocket client (loopTask's default 8KB stack wasn't enough for that library's call depth once real aircraft data started flowing), fixed by moving the WS client onto its own dedicated 16KB-stack FreeRTOS task. **Still not done:** logging `ESP.getFreeHeap()` periodically over a multi-day unattended run to check for a slow leak -- the numbers above, plus a few hours of stable interactive operation, are not the same as a long-term guarantee.
 
 ## Display library choice
 

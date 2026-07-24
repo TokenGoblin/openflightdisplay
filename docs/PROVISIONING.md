@@ -7,8 +7,8 @@ See `docs/ARCHITECTURE.md` § "Discovery and pairing flow" for the high-level ra
 1. Power on the Core2. If it has no saved Wi-Fi credentials, its screen shows: "Connect to Wi-Fi network `OpenFlightDisplay-Setup-XXXX` to continue," where `XXXX` is derived from its device ID.
 2. On a phone or tablet, join that Wi-Fi network. Most devices will auto-open a captive-portal page; if not, browse to `http://192.168.4.1/`.
 3. Enter the home Wi-Fi SSID and password on that page. Submit.
-4. The Core2 attempts to join the home network. On success, it reboots into station mode and shows its assigned IP, a 6-digit pairing code, and a QR code encoding both.
-5. Open the OpenFlightDisplay tablet PWA, choose "Add Display," and either scan the QR code or type in the IP + code manually.
+4. The Core2 attempts to join the home network. On success, it reboots into station mode and shows its assigned IP, a 6-digit pairing code, and a QR code encoding both — and stays on that screen until it's paired.
+5. Open the OpenFlightDisplay tablet PWA, choose "Add Display," and **type in the IP + code manually** (the default and recommended path). Scanning the QR code is offered too, but confirmed via real hardware testing not to work in a normal deployment: a phone's camera app just opens it as a plain link, and the PWA's own in-app scanner needs a secure (HTTPS) context that this LAN-over-HTTP system doesn't have — see `docs/ARCHITECTURE.md` for why. If you scan it anyway, the Core2 now shows an explanatory page telling you to enter the details manually instead of a dead link.
 6. The PWA claims the pairing code (single-use, 10-minute expiry) and receives a pairing token.
 7. The PWA walks through location + monitoring radius, then writes that configuration (plus the gateway's address) to the Core2 using the pairing token.
 8. The Core2 persists this to LittleFS and connects to the gateway. Both the Core2 and the PWA now show live aircraft.

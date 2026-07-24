@@ -2,9 +2,11 @@
 
 ## Honesty note (read this first)
 
-This Phase 1 implementation session started with `git` available but no working `node`/`npm`, `platformio`, `python`, or `g++` toolchain in the sandbox — the code below was initially written and only manually reviewed. Node.js, Python, PlatformIO, and a MinGW-w64 GCC toolchain were then installed mid-session (via `winget`/`pip`), and **every test suite and build listed below has since actually been run**, with real bugs found and fixed along the way (see the git log for the detailed list — TS project-reference config, `exactOptionalPropertyTypes` fallout, a Fastify option that didn't exist, a flaky WS test timing race, PlatformIO's `test_build_src` requirement, Unity's double-precision flag, C++14 digit separators that broke under the ESP32 toolchain, and a couple of missing includes).
+This Phase 1 implementation session started with `git` available but no working `node`/`npm`, `platformio`, `python`, or `g++` toolchain in the sandbox — the code below was initially written and only manually reviewed. Node.js, Python, PlatformIO, and a MinGW-w64 GCC toolchain were then installed mid-session (via `winget`/`pip`), and **every test suite and build listed below has since actually been run**, with real bugs found and fixed along the way.
 
-Current status: **all 99 automated tests pass** (protocol 10, shared-models 11, gateway 25, tablet-pwa 19, firmware native 34), typecheck/lint/build are clean across every TypeScript workspace, and the real ESP32 firmware target (`pio run -e core2`) builds and links successfully. What's **still not verified** is physical-hardware runtime behavior (see "Manual/hardware validation" below) and Playwright end-to-end tests (no browser-automation tool was available even after installing the rest of the toolchain).
+A physical M5Stack Core2 was then connected and used for genuine end-to-end hardware testing: full first-boot provisioning, pairing with a real gateway, live setup via the tablet PWA on an actual phone, and real aircraft data from adsb.lol. This surfaced several real bugs that no amount of code review, native testing, or even a successful `pio run` build could have caught — see the git log for the full list, but the highlights: CORS was missing on both the firmware's and the gateway's HTTP APIs (every cross-origin fetch() from the PWA was silently blocked with no indication it was CORS); the QR pairing code's in-app camera scan is fundamentally non-functional over plain HTTP (`navigator.mediaDevices` requires a secure context, which this LAN-over-HTTP system doesn't have by design); the setup wizard lost all progress on a mobile browser tab reload; numeric form inputs got stuck on `0` and couldn't accept negative longitude; a naive URL string-replace produced malformed gateway URLs; a genuine ESP32 stack overflow in the WebSocket client took three rounds of real diagnosis (including a symbolicated crash backtrace) to fix, ultimately requiring the WS client to run in its own dedicated FreeRTOS task; the gateway's `.env` file was never actually being loaded (silently defaulting to the mock provider the entire session); and a burst of rapid WebSocket reconnects crashed the entire gateway process via an unhandled promise rejection from a file-write race condition.
+
+Current status: **all 107 automated tests pass** (protocol 10, shared-models 11, gateway 26, tablet-pwa 26, firmware native 34 — up from 99 as bugs found via hardware testing got regression tests), typecheck/lint/build are clean across every TypeScript workspace, and the real ESP32 firmware builds, flashes, and **runs stably on physical hardware with live aircraft data flowing continuously with no crashes**. What's still not done: Playwright end-to-end tests (no browser-automation tool was available even after installing the rest of the toolchain), and a multi-day continuous-operation/heap-leak soak test (see item 8 below).
 
 ## Firmware tests (`firmware/core2/test/native`)
 
@@ -37,16 +39,17 @@ npm install
 npm test
 ```
 
-All 25 tests across 5 suites pass.
+All 26 tests across 5 suites pass.
 
 Covered in Phase 1:
 - Mock provider normalization → `AircraftState[]` shape and required-field validation.
 - Replay provider: deterministic playback of a fixture file.
-- adsb.lol adapter: normalization from a recorded sample response fixture (does not hit the network in tests).
+- adsb.lol adapter: normalization from a recorded sample response fixture (does not hit the network in tests) — separately confirmed against the live API by hand (see `docs/DATA_SOURCE_EVALUATION.md`).
 - Nearest-distance ranking given a `MonitoringArea`.
 - REST endpoint validation (pairing, config CRUD) — rejects malformed bodies, enforces pairing-token requirement on writes.
 - WebSocket contract test: client receives a versioned envelope, a heartbeat, and a provider-status message on simulated provider failure.
 - Config persistence round-trip (write, restart the store, read back identical config).
+- A burst of 20 concurrent writes to the same device record, none of which reject (regression test for a real crash found via hardware testing — a file-write race condition that took down the whole gateway process; see the git log).
 
 Deferred: rate-limit-exhaustion behavior against a real provider, multi-client WS fan-out under load, SQLite migration tests (no SQLite until Phase 4).
 
@@ -59,15 +62,16 @@ npm install
 npm test
 ```
 
-All 19 tests across 5 suites pass.
+All 26 tests across 6 suites pass.
 
 Covered in Phase 1:
-- Setup-wizard step transitions (pairing → location → radius → confirm), including manual-entry and mocked-geolocation paths.
+- Setup-wizard step transitions (pairing → location → radius → confirm), including manual-entry and mocked-geolocation paths, and resuming from a persisted mid-wizard state.
 - Map + info card rendering against mock aircraft data.
 - Status-banner state transitions (connecting, connected, stale, source-unavailable, wifi-down-equivalent/gateway-unreachable).
 - Config persisted to and rehydrated from `localStorage`, confirming Wi-Fi credentials are never touched by the PWA.
+- URL normalization/validation helpers (`lib/url.ts`) — regression tests for a real bug where a bare `ip:port` (no scheme) silently produced a malformed `ws://` URL.
 
-Deferred: Playwright end-to-end tests (no browser-automation toolchain in this sandbox this session — write these in a follow-up session with the tool available), true camera-based QR scan (mocked in unit tests instead), full kiosk-mode wake-lock behavior (browser-dependent, needs manual verification on target tablets).
+Deferred: Playwright end-to-end tests (no browser-automation toolchain in this sandbox this session). Camera-based QR scanning is mocked in unit tests, and separately confirmed via real hardware testing to be **fundamentally non-functional** in this system's normal (plain-HTTP-over-LAN) deployment, since `navigator.mediaDevices` requires a secure context — manual entry is the PWA's default and primary pairing path as a result, not a fallback. Full kiosk-mode wake-lock behavior is still browser-dependent and unverified.
 
 ## Replay fixtures (`services/gateway/tests/fixtures`)
 
@@ -89,15 +93,17 @@ Fixtures are synthetic/sanitized — no real registrations tied to identifiable 
 
 Explicitly **not** included yet (Phase 5): signed release artifacts, hardware-in-the-loop flashing, long-duration soak tests. A `docs/RELEASE_PROCESS.md` will be written when that phase starts.
 
-## Manual/hardware validation (required before calling Phase 1 "hardware-verified")
+## Manual/hardware validation
 
-None of this was performed in this session — it requires a physical M5Stack Core2, and the firmware, while it now builds and links successfully (`pio run -e core2`, see `docs/CORE2_HARDWARE.md` for real flash/RAM figures), has never actually run on a device. Documented here so whoever has the hardware knows exactly what to check:
+Performed against a real M5Stack Core2 (ESP32-D0WDQ6-V3, 16MB flash, no PSRAM) and a real gateway/PWA on the same LAN:
 
-1. Flash firmware (`pio run -e core2 -t upload`), confirm boot screen appears.
-2. Confirm SoftAP + captive portal appears when no Wi-Fi is configured; enter real credentials; confirm it connects and persists across a power cycle.
-3. Confirm the QR code renders correctly and scans successfully from the PWA on an actual tablet.
-4. Confirm pairing completes and location/radius set from the PWA reach the Core2.
-5. With the gateway running and adsb.lol reachable, confirm a real nearby aircraft (if any are in range at test time) appears on both Core2 and PWA within one polling interval of each other.
-6. Pull the Wi-Fi router's power; confirm the Core2 shows "Wi-Fi disconnected," not a crash or blank screen; confirm it reconnects automatically when Wi-Fi returns.
-7. Stop the gateway process; confirm the Core2 shows "Data source unavailable" (or similar) rather than freezing on stale data silently.
-8. Leave it running for at least 24 hours; check for heap growth (log `ESP.getFreeHeap()` periodically) as a basic leak check.
+1. **Done.** Flash firmware, confirm boot screen appears. (Note: the auto-reset sequence after `pio run -t upload` did not reliably bring the board out of the ROM bootloader's download mode on this unit/cable combination — a manual power-cycle was needed after every flash. Worth knowing if a future flash "looks stuck" showing "waiting for download.")
+2. **Done.** SoftAP + captive portal appears when no Wi-Fi is configured; real credentials entered and connected successfully; config persisted across reboots.
+3. **Done, with a real finding.** The QR code renders correctly, but scanning it two different ways both failed as originally designed: a phone's default camera app opens it as a plain link (fixed by adding a GET handler that explains what to do instead of a dead page), and the PWA's own in-app camera scanner cannot work at all over plain HTTP (`navigator.mediaDevices` requires a secure context — see docs/ARCHITECTURE.md). **Manual IP/code entry is the pairing method that actually works** and is now the PWA's default, not a fallback.
+4. **Done, with real findings.** Pairing and config both reached the Core2 successfully, but only after fixing: missing CORS on the Core2's own HTTP API, missing CORS on the gateway's API, a stuck-at-`0`/no-negative-numbers bug in the location form, a malformed gateway WebSocket URL from a naive string replace, and a response-shape mismatch between the PWA and the Core2's config endpoint.
+5. **Done.** With the gateway pointed at `adsb.lol` and a real location, real moving commercial traffic (multiple distinct real flights, confirmed against the live API) appeared on both the Core2 and the PWA within one polling interval of each other.
+6. **Not done.** Pulling the Wi-Fi router's power was not tested (would disrupt the tester's home network) — `WifiState::Disconnected` handling is implemented and native-logic-adjacent paths are tested, but this exact scenario is unverified on real hardware.
+7. **Done.** Stopping the gateway process showed "Data source unavailable" on the Core2 (not a crash or frozen screen) exactly as designed; restarting the gateway reconnected automatically within about a second with no manual intervention, and the display correctly returned to an accurate live state ("No matching aircraft" when that was in fact true at that moment, not stale cached data).
+8. **Not done.** No multi-day continuous-operation/heap-growth soak test has been run yet. Worth prioritizing given how many real concurrency/stack issues turned up in just a few hours of interactive testing (see the git log) — a long unattended run could surface more.
+
+Two crashes were found and fixed as a *direct result* of this checklist, neither of which any prior review or automated test had caught: a stack overflow in the ESP32's WebSocket handling (found while validating item 5) and an unhandled-promise-rejection crash in the gateway's device store from a file-write race (found while validating item 7). Both now have regression coverage (native/gateway tests) where the underlying logic allows it, and are documented in detail in the relevant source files and git commits.

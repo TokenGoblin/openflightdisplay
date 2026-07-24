@@ -29,7 +29,9 @@ Synthetic data generator with no network dependency. Produces a small number of 
 Reads a JSON fixture file (see `services/gateway/tests/fixtures/`) and plays it back on a timer, looping. Used for deterministic demos and tests that need a specific scenario (e.g., "provider outage," "aircraft with stale position").
 
 ### `adsblol`
-Calls `https://api.adsb.lol` for aircraft near the `MonitoringArea`'s center within its radius. No API key currently required (re-verify against `https://api.adsb.lol/docs` before relying on this in production — provider terms can change; see `docs/DATA_SOURCE_EVALUATION.md`). Polls no faster than once every 15 seconds by default (configurable, conservative default since the provider's rate limit is described as dynamic/load-based rather than a fixed published number).
+Calls `https://api.adsb.lol` for aircraft near the `MonitoringArea`'s center within its radius. No API key currently required (this was re-verified live, and terms can still change over time — re-check `https://api.adsb.lol/docs` periodically; see `docs/DATA_SOURCE_EVALUATION.md`). Polls no faster than once every 15 seconds by default (configurable, conservative default since the provider's rate limit is described as dynamic/load-based rather than a fixed published number).
+
+**Confirmed working end-to-end** against a real M5Stack Core2 and real air traffic: switching `AVIATION_PROVIDER=adsblol` in `.env` and setting a real monitoring area showed live, moving commercial flights (multiple different real flights observed over time, e.g. a Delta 737 and American/SkyWest regional jets) on both the Core2's display and the tablet PWA.
 
 ## Documented but not implemented in Phase 1
 

@@ -10,11 +10,11 @@ Status legend: `done` (Phase 1 shipped), `planned` (designed, not built), `futur
 |---|---|---|---|---|---|---|---|---|---|
 | First-boot setup screen | Guided onboarding | Yes | Yes | No | None | 1 | done | Native (boot state machine) + PWA wizard tests | |
 | Unique device ID | Stable identity | Yes | Yes (displays it) | No | None | 1 | done | Native config tests | Generated from chip ID |
-| QR code pairing payload | Fast pairing | Yes (renders) | Yes (scans) | No | None | 1 | done | Manual (camera) + native QR-payload format test | Encodes IP + short code |
-| SoftAP + captive portal | No-app Wi-Fi setup | Yes | N/A | No | None | 1 | done | Manual hardware test (documented, unexecuted) | |
-| Normal LAN mode | Steady-state operation | Yes | Yes | No | None | 1 | done | Manual | |
-| mDNS discovery (Core2-side) | Zero-config LAN discovery | Yes (advertises) | No (browsers can't browse mDNS) | No | None | 1 | done (Core2 only) | Manual | PWA relies on QR/manual entry instead — documented in ARCHITECTURE.md |
-| Manual IP entry | Fallback pairing | N/A | Yes | No | None | 1 | done | PWA unit test | |
+| QR code pairing payload | Fast pairing | Yes (renders) | Yes (attempts scan) | No | None | 1 | done, but confirmed non-functional in practice | Manual hardware test (real phone) + native QR-payload format test | Renders correctly, but a phone's default camera app just opens the link, and the PWA's in-app scanner can't run at all without HTTPS (`navigator.mediaDevices`) — see ARCHITECTURE.md/PROVISIONING.md. Not the working pairing path. |
+| SoftAP + captive portal | No-app Wi-Fi setup | Yes | N/A | No | None | 1 | done | Manual hardware test (real Core2, executed) | |
+| Normal LAN mode | Steady-state operation | Yes | Yes | No | None | 1 | done | Manual hardware test (real Core2, executed) | |
+| mDNS discovery (Core2-side) | Zero-config LAN discovery | Yes (advertises) | No (browsers can't browse mDNS) | No | None | 1 | done (Core2 only) | Manual | PWA relies on manual entry instead (QR doesn't work in practice) — documented in ARCHITECTURE.md |
+| Manual IP entry | Primary pairing path | N/A | Yes | No | None | 1 | done | PWA unit test + real hardware test | Confirmed via hardware testing to be the pairing method that actually works; not a fallback |
 | Pairing code | Short-lived auth for first config write | Yes | Yes | No | None | 1 | done | Native + PWA tests | |
 | Multiple-device support | Fleet management | Yes | Planned | Yes | None | 5 | future | — | |
 | Device naming | Friendly labels | Yes | Yes | No | None | 1 | done | Config tests | |
