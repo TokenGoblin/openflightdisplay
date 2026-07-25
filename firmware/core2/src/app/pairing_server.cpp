@@ -329,6 +329,27 @@ static String buildDashboard(const AppContext& ctx, const char* ip, const char* 
   html += heapBuf;
   html += "</span></div>";
 
+  // Battery (cached from AXP192 via pollBattery)
+  {
+    html += "<div class=\"card-row\"><span class=\"row-label\">Battery</span>";
+    const auto& batt = ctx.battery;
+    if (batt.valid) {
+      html += "<span class=\"pill ";
+      if (batt.percent >= 20) html += "pill-ok";
+      else if (batt.percent >= 10) html += "pill-warn";
+      else html += "pill-err";
+      html += "\">";
+      char bbuf[16];
+      if (batt.charging) std::snprintf(bbuf, sizeof(bbuf), "%u%% %s %.2fV", batt.percent, "\xE2\x9A\xA1", batt.voltage);
+      else std::snprintf(bbuf, sizeof(bbuf), "%u%% %.2fV", batt.percent, batt.voltage);
+      html += bbuf;
+      html += "</span>";
+    } else {
+      html += "<span class=\"pill pill-neutral\">--%</span>";
+    }
+    html += "</div>";
+  }
+
   html += "<div class=\"card-row\"><span class=\"row-label\">Location</span><span class=\"row-value\" style=\"font-size:13px\">";
   if (ctx.hasConfig && ctx.config.hasMonitoringArea) {
     const auto& a = ctx.config.monitoringArea;
@@ -558,6 +579,25 @@ void registerPairingRoutes(AsyncWebServer& server, AppContext& ctx) {
     const size_t len = serializeDeviceConfig(ctx.config, buf, sizeof(buf));
     r->send(200, "application/json", String(buf, len));
   });
+
+  // Device status (battery + system health)
+  server.on("/api/v1/device-status", HTTP_GET, [&ctx](AsyncWebServerRequest* r) {
+    g_statusDoc.clear();
+    g_statusDoc["schemaVersion"] = 1;
+    JsonObject batt = g_statusDoc.createNestedObject("battery");
+    const auto& b = ctx.battery;
+    batt["valid"] = b.valid;
+    batt["percent"] = b.percent;
+    batt["voltage"] = b.voltage;
+    batt["charging"] = b.charging;
+    batt["externalPower"] = b.externalPower;
+    batt["readAgeMs"] = b.lastReadMs > 0 ? millis() - b.lastReadMs : 0;
+    char buf[128];
+    const size_t len = serializeJson(g_statusDoc, buf, sizeof(buf));
+    r->send(200, "application/json", String(buf, len));
+  });
+
+  server.on("/api/v1/device-status", HTTP_OPTIONS, [](AsyncWebServerRequest* r) { r->send(200); });
 
   server.on("/api/v1/factory-reset", HTTP_POST, [&ctx](AsyncWebServerRequest* r) {
     LittleFS.remove("/config.json");

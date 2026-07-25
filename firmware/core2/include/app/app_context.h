@@ -2,6 +2,7 @@
 
 #include "app/config_store.h"
 #include "app/device_identity.h"
+#include "domain/battery.h"
 #include "domain/config.h"
 #include "domain/protocol.h"
 
@@ -44,6 +45,8 @@ struct AppContext {
 
   ProviderHealth providerHealth = ProviderHealth::Ok;
   bool providerStarted = false;
+
+  ofd::BatteryState battery;
 };
 
 }  // namespace ofd::app

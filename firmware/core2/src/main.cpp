@@ -1,3 +1,4 @@
+#include <ArduinoOTA.h>
 #include <ESPAsyncWebServer.h>
 #include <ESPmDNS.h>
 #include <LittleFS.h>
@@ -9,6 +10,7 @@
 
 #include "app/adsb_provider.h"
 #include "app/app_context.h"
+#include "app/battery_monitor.h"
 #include "app/config_store.h"
 #include "app/device_identity.h"
 #include "app/display.h"
@@ -34,16 +36,71 @@ uint32_t g_lastWifiCredsCheckAtMs = 0;
 constexpr uint32_t kWifiConnectTimeoutMs = 15000;
 constexpr uint32_t kWifiSaveRebootDelayMs = 1500;
 constexpr uint32_t kWifiCredsCheckIntervalMs = 1000;
-// Redraw interval. Aircraft data arrives every ~15 s from adsb.lol;
-// the clock ticks every minute. A 5 s interval eliminates the visible
-// flicker-blink of repeated full-screen fills while keeping the age
-// indicator acceptably fresh.
 constexpr uint32_t kRenderIntervalMs = 5000;
+constexpr uint32_t kOtaHandleIntervalMs = 200;
 
 uint32_t g_lastRenderAtMs = 0;
+uint32_t g_lastOtaAtMs = 0;
+
+bool g_otaInProgress = false;
+uint8_t g_otaPercent = 0;
 
 bool ntpTimeIsPlausible() {
   return time(nullptr) > 1700000000;
+}
+
+void initOta() {
+  ArduinoOTA.setHostname(g_ctx.deviceId);
+  ArduinoOTA.setPassword(OTA_PASSWORD);
+
+  ArduinoOTA.onStart([&]() {
+    g_otaInProgress = true;
+    g_otaPercent = 0;
+    Serial.println("OTA update started");
+    g_display.renderOtaProgress(0, false, "Receiving firmware...");
+  });
+
+  ArduinoOTA.onProgress([&](unsigned int progress, unsigned int total) {
+    if (total > 0) {
+      const uint8_t pct = static_cast<uint8_t>((static_cast<uint64_t>(progress) * 100) / total);
+      if (pct != g_otaPercent) {
+        g_otaPercent = pct;
+        Serial.printf("OTA: %u%%\n", g_otaPercent);
+        char status[32];
+        std::snprintf(status, sizeof(status), "%.1f / %.1f kB",
+                      progress / 1024.0f, total / 1024.0f);
+        g_display.renderOtaProgress(g_otaPercent, false, status);
+      }
+    }
+  });
+
+  ArduinoOTA.onEnd([&]() {
+    g_otaInProgress = false;
+    Serial.println("OTA update complete");
+    g_display.renderOtaProgress(100, true, "Update installed");
+    delay(2000);
+  });
+
+  ArduinoOTA.onError([&](ota_error_t error) {
+    g_otaInProgress = false;
+    Serial.printf("OTA error: %u\n", error);
+    const char* errMsg = "Unknown error";
+    switch (error) {
+      case OTA_AUTH_ERROR:    errMsg = "Authentication failed"; break;
+      case OTA_BEGIN_ERROR:   errMsg = "Could not start update"; break;
+      case OTA_CONNECT_ERROR: errMsg = "Connection failed"; break;
+      case OTA_RECEIVE_ERROR: errMsg = "Receive failed"; break;
+      case OTA_END_ERROR:     errMsg = "Finalisation failed"; break;
+      default: break;
+    }
+    char buf[40];
+    std::snprintf(buf, sizeof(buf), "Error: %s", errMsg);
+    g_display.renderOtaProgress(g_otaPercent, false, buf);
+    delay(5000);
+  });
+
+  ArduinoOTA.begin();
+  Serial.println("OTA service started");
 }
 
 void enterProvisioningMode() {
@@ -66,9 +123,12 @@ void enterConnectedMode() {
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
   MDNS.begin(g_ctx.deviceId);
   MDNS.addService("openflightdisplay", "tcp", 80);
+  MDNS.addServiceTxt("openflightdisplay", "tcp", "type", "core2");
 
   registerPairingRoutes(g_server, g_ctx);
   g_server.begin();
+
+  initOta();
 
   if (!g_ctx.hasConfig || !g_ctx.config.hasMonitoringArea) {
     g_ctx.pairingCodeManager.regenerate(millis());
@@ -91,8 +151,6 @@ void renderCurrentState() {
     return;
   }
 
-  // Start the data source if it wasn't started at boot (config arrived
-  // later via the setup page while the device was already online).
   if (!g_ctx.providerStarted) {
     startDataSource();
   }
@@ -132,10 +190,16 @@ void renderCurrentState() {
 
 }  // namespace
 
+// Wire the display's file-scope context pointer so the battery
+// pill can read the cached BatteryState from AppContext.
+// s_ctx is defined in display.cpp namespace ofd::app.
+using ofd::app::s_ctx;
+
 void setup() {
   auto cfg = M5.config();
   M5.begin(cfg);
   g_display.begin();
+  s_ctx = &g_ctx;
   g_display.renderBoot();
 
   LittleFS.begin(/*formatOnFail=*/true);
@@ -158,6 +222,15 @@ void setup() {
 void loop() {
   g_display.update();
 
+  if (g_ctx.wifiState == WifiState::Connected) {
+    if (g_otaInProgress || millis() - g_lastOtaAtMs >= kOtaHandleIntervalMs) {
+      ArduinoOTA.handle();
+      g_lastOtaAtMs = millis();
+    }
+  }
+
+  if (g_otaInProgress) return;
+
   if (g_ctx.wifiState == WifiState::Provisioning) {
     processProvisioningDns();
 
@@ -173,6 +246,9 @@ void loop() {
     }
     return;
   }
+
+  // Poll battery in the background (~10 s interval, throttled internally)
+  pollBattery(g_ctx);
 
   if (millis() - g_lastRenderAtMs >= kRenderIntervalMs) {
     renderCurrentState();

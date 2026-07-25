@@ -8,6 +8,11 @@
 
 namespace ofd::app {
 
+// File-scope context pointer for battery access in footer rendering.
+// Set once by main.cpp after the context is constructed.
+// NOT static — main.cpp references this via extern.
+AppContext* s_ctx = nullptr;
+
 namespace {
 
 constexpr int kScreenW = 320;
@@ -287,6 +292,26 @@ void Display::renderSingleAircraft(const ofd::AircraftState& ac, uint32_t ageS) 
   pill(4, kFooterY + 4, "WIFI", true);
   pill(64, kFooterY + 4, "ADS-B", true);
 
+  // Battery pill (far right of footer, size 1)
+  {
+    M5.Display.setTextSize(1);
+    const auto& b = s_ctx != nullptr ? s_ctx->battery : ofd::BatteryState{};
+    if (b.valid) {
+      uint32_t batBg, batFg;
+      if (b.percent >= 20)      { batBg = 0x0300; batFg = TFT_GREEN; }
+      else if (b.percent >= 10) { batBg = 0x3220; batFg = 0xFFE0; }
+      else                       { batBg = 0x3000; batFg = TFT_RED; }
+      char batLabel[8];
+      if (b.charging) std::snprintf(batLabel, sizeof(batLabel), "%u%% CHG", b.percent);
+      else std::snprintf(batLabel, sizeof(batLabel), "%u%%", b.percent);
+      const int bw = static_cast<int>(std::strlen(batLabel)) * 6 + 12;
+      fillRect(190, kFooterY + 4, bw, 14, batBg);
+      M5.Display.setTextColor(batFg, batBg);
+      M5.Display.setCursor(194, kFooterY + 7);
+      M5.Display.print(batLabel);
+    }
+  }
+
   // Vertical rate indicator in footer
   M5.Display.setTextSize(1);
   if (ac.hasVerticalRateFtPerMin) {
@@ -355,6 +380,49 @@ void Display::renderIdleClock(const char* timeHhMm, bool wifiUp, bool provUp) {
   fillRect(0, kFooterY, kScreenW, kFooterH, kFooterBg);
   pill(4, kFooterY + 4, "WIFI", wifiUp);
   pill(64, kFooterY + 4, "ADS-B", provUp);
+}
+
+void Display::renderOtaProgress(uint8_t percent, bool complete, const char* status) {
+  M5.Display.fillScreen(TFT_BLACK);
+
+  // Title
+  M5.Display.setTextSize(2);
+  M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
+  const char* title = complete ? "Update Complete" : "Updating Firmware";
+  M5.Display.setCursor(40, 30);
+  M5.Display.print(title);
+
+  // Status text
+  M5.Display.setTextSize(1);
+  M5.Display.setTextColor(0x8410, TFT_BLACK);
+  M5.Display.setCursor(40, 65);
+  M5.Display.print(status);
+
+  if (!complete) {
+    // Progress bar background
+    const int bx = 40, by = 95, bw = 240, bh = 20;
+    M5.Display.drawRoundRect(bx, by, bw, bh, 4, 0x3186);
+
+    // Progress fill
+    if (percent > 0) {
+      const int fillW = (bw - 4) * percent / 100;
+      M5.Display.fillRoundRect(bx + 2, by + 2, fillW, bh - 4, 2, 0x0A84FF >> 3);
+    }
+
+    // Percentage text
+    M5.Display.setTextSize(2);
+    M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
+    char pct[8];
+    std::snprintf(pct, sizeof(pct), "%u%%", percent);
+    M5.Display.setCursor(140, 130);
+    M5.Display.print(pct);
+  }
+
+  // Warning
+  M5.Display.setTextSize(1);
+  M5.Display.setTextColor(TFT_RED, TFT_BLACK);
+  M5.Display.setCursor(40, complete ? 130 : 180);
+  M5.Display.print(complete ? "Restarting..." : "Do not remove power");
 }
 
 void Display::update() { M5.update(); }

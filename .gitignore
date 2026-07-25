@@ -7,6 +7,9 @@ coverage/
 *.tsbuildinfo
 npm-debug.log*
 
+# OTA password (local, never committed)
+firmware/core2/ota_password.txt
+
 # PlatformIO
 firmware/core2/.pio/
 firmware/core2/.pioenvs/

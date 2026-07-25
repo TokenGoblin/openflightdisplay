@@ -15,6 +15,11 @@ enum class StatusMessage {
   DataIsStale,
 };
 
+// Pointer to the global AppContext, set by main.cpp in setup().
+// Used by the display module to read cached battery state without
+// introducing a circular header dependency.
+extern AppContext* s_ctx;
+
 class Display {
  public:
   void begin();
@@ -32,8 +37,10 @@ class Display {
   void renderStatus(StatusMessage message, const char* ipAddress = "");
   void renderIdleClock(const char* timeHhMm, bool wifiConnected, bool gatewayConnected);
 
-  // Call once per loop() iteration; handles the touch-to-toggle-diagnostics
-  // gesture (docs/CORE2_HARDWARE.md's minimal Phase 1 touch interaction).
+  // OTA progress screen — percentage 0-100, complete=true for success screen.
+  void renderOtaProgress(uint8_t percent, bool complete, const char* status);
+
+  // Call once per loop() iteration.
   void update();
 };
 
