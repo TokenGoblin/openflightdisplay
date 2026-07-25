@@ -1,13 +1,14 @@
 import { STATUS_LABEL, type StatusKind } from "../lib/status";
 
-const COLOR_BY_STATUS: Record<StatusKind, string> = {
-  "configuration-required": "#8a93a6",
-  connecting: "#f5a623",
-  "data-source-unavailable": "#e5484d",
-  "waiting-for-first-data": "#f5a623",
-  "no-matching-aircraft": "#8a93a6",
-  stale: "#f5a623",
-  "showing-aircraft": "#3ecf7f",
+/** CSS class mapping for each status kind (defined in global.css). */
+const CLASS_BY_STATUS: Record<StatusKind, string> = {
+  "configuration-required": "status-banner status-banner--configuration-required",
+  connecting: "status-banner status-banner--connecting",
+  "data-source-unavailable": "status-banner status-banner--data-source-unavailable",
+  "waiting-for-first-data": "status-banner status-banner--waiting-for-first-data",
+  "no-matching-aircraft": "status-banner status-banner--no-matching-aircraft",
+  stale: "status-banner status-banner--stale",
+  "showing-aircraft": "",
 };
 
 // `detail?: string | undefined` (not just `detail?: string`) is deliberate:
@@ -19,17 +20,7 @@ export function StatusBanner({ status, detail }: { status: StatusKind; detail?: 
   if (status === "showing-aircraft") return null;
 
   return (
-    <div
-      role="status"
-      data-status={status}
-      style={{
-        background: COLOR_BY_STATUS[status],
-        color: "#0b1220",
-        padding: "0.5rem 1rem",
-        fontWeight: 600,
-        textAlign: "center",
-      }}
-    >
+    <div role="status" data-status={status} className={CLASS_BY_STATUS[status]}>
       {STATUS_LABEL[status]}
       {detail ? ` — ${detail}` : ""}
     </div>

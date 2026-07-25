@@ -8,20 +8,11 @@ function formatAge(lastUpdatedAt: Date | null): string {
 
 export function AircraftCard({ aircraft, lastUpdatedAt }: { aircraft: AircraftState; lastUpdatedAt: Date | null }) {
   return (
-    <section
-      aria-label="Nearest aircraft"
-      style={{
-        background: "#1c2740",
-        color: "#eef3fb",
-        borderRadius: 12,
-        padding: "1rem 1.25rem",
-        minWidth: 260,
-      }}
-    >
-      <h2 style={{ margin: 0, fontSize: "1.5rem" }}>{aircraft.callsign ?? aircraft.icaoHex}</h2>
-      {aircraft.aircraftTypeCode ? <p style={{ margin: "0.25rem 0", color: "#9fb0c8" }}>{aircraft.aircraftTypeCode}</p> : null}
+    <section aria-label="Nearest aircraft" className="aircraft-card">
+      <h2 className="aircraft-card__heading">{aircraft.callsign ?? aircraft.icaoHex}</h2>
+      {aircraft.aircraftTypeCode ? <p className="aircraft-card__type">{aircraft.aircraftTypeCode}</p> : null}
 
-      <dl style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "0.25rem 0.75rem", margin: "0.75rem 0" }}>
+      <dl className="aircraft-card__details">
         {aircraft.distanceFromObserverKm !== undefined ? (
           <>
             <dt>Distance</dt>
@@ -54,7 +45,7 @@ export function AircraftCard({ aircraft, lastUpdatedAt }: { aircraft: AircraftSt
         ) : null}
       </dl>
 
-      <p style={{ margin: 0, fontSize: "0.85rem", color: "#9fb0c8" }}>Updated {formatAge(lastUpdatedAt)}</p>
+      <p className="aircraft-card__age">Updated {formatAge(lastUpdatedAt)}</p>
     </section>
   );
 }

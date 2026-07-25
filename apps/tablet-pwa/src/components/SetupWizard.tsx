@@ -66,14 +66,14 @@ export function SetupWizard({ onComplete }: { onComplete: (connection: StoredCon
   }, [step, draft]);
 
   return (
-    <div style={{ maxWidth: 480, margin: "2rem auto", padding: "0 1rem" }}>
+    <div className="setup-wizard">
       {step !== "pair" ? (
-        <div style={{ marginBottom: "1rem" }}>
+        <div className="setup-wizard__paired-pill">
           <StatusPill label="Paired" />
         </div>
       ) : null}
       {error ? (
-        <p role="alert" style={{ color: "#e5484d" }}>
+        <p role="alert" className="setup-wizard__error">
           {error}
         </p>
       ) : null}
@@ -211,7 +211,7 @@ function PairStep({
   return (
     <div>
       <h2>Add your display</h2>
-      <div role="tablist" aria-label="Pairing method" style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
+      <div role="tablist" aria-label="Pairing method" className="setup-wizard__tabs">
         <button type="button" aria-pressed={mode === "scan"} onClick={() => setMode("scan")}>
           Scan QR code
         </button>
@@ -222,7 +222,7 @@ function PairStep({
 
       {mode === "scan" ? (
         <div>
-          <video ref={videoRef} aria-label="Camera preview" style={{ width: "100%", borderRadius: 8 }} muted playsInline />
+          <video ref={videoRef} aria-label="Camera preview" className="setup-wizard__scanner" muted playsInline />
           {scanError ? <p role="alert">{scanError} — try manual entry instead.</p> : null}
         </div>
       ) : (
@@ -238,7 +238,7 @@ function PairStep({
             <input value={manualIp} onChange={(e) => setManualIp(e.target.value)} placeholder="192.168.1.42" required />
           </label>
           {manualIp.trim() !== "" && !isValidAddress(manualIp) ? (
-            <p role="alert">That doesn't look like a valid IP address.</p>
+            <p role="alert" className="setup-wizard__validation-error">That doesn't look like a valid IP address.</p>
           ) : null}
           <label>
             Pairing code
@@ -254,7 +254,7 @@ function PairStep({
             />
           </label>
           {gatewayBaseUrl.trim() !== "" && !isValidAddress(gatewayBaseUrl) ? (
-            <p role="alert">That doesn't look like a valid gateway address.</p>
+            <p role="alert" className="setup-wizard__validation-error">That doesn't look like a valid gateway address.</p>
           ) : null}
           <button
             type="submit"
@@ -347,7 +347,7 @@ function LocationStep({
           />
         </label>
         {!isValid && (latitudeText.trim() !== "" || longitudeText.trim() !== "") ? (
-          <p role="alert">Enter a valid latitude (-90 to 90) and longitude (-180 to 180).</p>
+          <p role="alert" className="setup-wizard__validation-error">Enter a valid latitude (-90 to 90) and longitude (-180 to 180).</p>
         ) : null}
         <button type="button" onClick={onBack}>
           Back
@@ -396,7 +396,9 @@ function RadiusStep({
           required
         />
       </label>
-      {!isValid && radiusText.trim() !== "" ? <p role="alert">Enter a radius between 0.5 and 500 km.</p> : null}
+      {!isValid && radiusText.trim() !== "" ? (
+        <p role="alert" className="setup-wizard__validation-error">Enter a radius between 0.5 and 500 km.</p>
+      ) : null}
       <button type="button" onClick={onBack}>
         Back
       </button>

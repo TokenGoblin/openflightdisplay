@@ -25,6 +25,8 @@ interface Deps {
  */
 export interface AircraftWebsocketHandle {
   getConnectedDeviceCount(): number;
+  /** Clears the heartbeat timer. Call before closing the server. */
+  destroy(): void;
 }
 
 export function registerAircraftWebsocket(app: FastifyInstance, deps: Deps): AircraftWebsocketHandle {
@@ -62,7 +64,7 @@ export function registerAircraftWebsocket(app: FastifyInstance, deps: Deps): Air
     }
   });
 
-  setInterval(() => {
+  const heartbeatTimer = setInterval(() => {
     const message: HeartbeatMessage = {
       schemaVersion: 1,
       type: "heartbeat",
@@ -119,6 +121,9 @@ export function registerAircraftWebsocket(app: FastifyInstance, deps: Deps): Air
         if (sockets.size > 0) count += 1;
       }
       return count;
+    },
+    destroy(): void {
+      clearInterval(heartbeatTimer);
     },
   };
 }

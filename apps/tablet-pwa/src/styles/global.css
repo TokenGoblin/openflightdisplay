@@ -1,28 +1,50 @@
 :root {
   color-scheme: dark;
   font-family: system-ui, sans-serif;
+
+  /* Design-token CSS variables — keep in sync with packages/design-tokens */
+  --color-bg-primary: #0b1220;
+  --color-bg-secondary: #141d2e;
+  --color-surface: #1c2740;
+  --color-text-primary: #eef3fb;
+  --color-text-secondary: #9fb0c8;
+  --color-accent-amber: #f5a623;
+  --color-accent-cyan: #3ecfd8;
+  --color-status-ok: #3ecf7f;
+  --color-status-degraded: #f5a623;
+  --color-status-unavailable: #e5484d;
+  --color-status-stale: #8a93a6;
+  --radius: 6px;
+  --radius-lg: 12px;
 }
 
 body {
   margin: 0;
-  background: #0b1220;
-  color: #eef3fb;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
 }
+
+/* ---- shared: buttons, inputs, labels ---- */
 
 button {
   font: inherit;
   padding: 0.4rem 0.8rem;
   margin: 0.25rem 0.25rem 0.25rem 0;
-  border-radius: 6px;
-  border: 1px solid #3ecfd8;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-accent-cyan);
   background: transparent;
-  color: #eef3fb;
+  color: var(--color-text-primary);
   cursor: pointer;
 }
 
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 button[aria-pressed="true"] {
-  background: #3ecfd8;
-  color: #0b1220;
+  background: var(--color-accent-cyan);
+  color: var(--color-bg-primary);
 }
 
 input {
@@ -31,14 +53,149 @@ input {
   width: 100%;
   margin: 0.25rem 0 0.75rem;
   padding: 0.4rem;
-  border-radius: 6px;
-  border: 1px solid #9fb0c8;
-  background: #141d2e;
-  color: #eef3fb;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-text-secondary);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
   box-sizing: border-box;
 }
 
 label {
   display: block;
   margin-top: 0.5rem;
+}
+
+/* ---- status banner ---- */
+
+.status-banner {
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  text-align: center;
+  color: var(--color-bg-primary);
+}
+
+.status-banner--connecting,
+.status-banner--waiting-for-first-data,
+.status-banner--stale {
+  background: var(--color-accent-amber);
+}
+
+.status-banner--data-source-unavailable {
+  background: var(--color-status-unavailable);
+}
+
+.status-banner--no-matching-aircraft,
+.status-banner--configuration-required {
+  background: var(--color-status-stale);
+}
+
+/* ---- display page ---- */
+
+.display-page {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+
+.display-page__header {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
+}
+
+.display-page__header-name {
+  font-weight: 600;
+}
+
+.display-page__header-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.display-page__content {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.display-page__map-area {
+  flex: 2;
+  min-width: 0;
+  position: relative;
+}
+
+.display-page__sidebar {
+  flex: 1;
+  padding: 1rem;
+  overflow: auto;
+}
+
+.display-page__kiosk-exit {
+  position: fixed;
+  bottom: 8px;
+  right: 8px;
+}
+
+/* ---- aircraft card ---- */
+
+.aircraft-card {
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.25rem;
+  min-width: 260px;
+}
+
+.aircraft-card__heading {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.aircraft-card__type {
+  margin: 0.25rem 0;
+  color: var(--color-text-secondary);
+}
+
+.aircraft-card__details {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.aircraft-card__age {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+/* ---- setup wizard ---- */
+
+.setup-wizard {
+  max-width: 480px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+.setup-wizard__paired-pill {
+  margin-bottom: 1rem;
+}
+
+.setup-wizard__error {
+  color: var(--color-status-unavailable);
+}
+
+.setup-wizard__tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.setup-wizard__scanner {
+  width: 100%;
+  border-radius: 8px;
+}
+
+.setup-wizard__validation-error {
+  color: var(--color-accent-amber);
 }

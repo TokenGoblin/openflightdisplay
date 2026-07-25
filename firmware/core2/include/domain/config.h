@@ -7,16 +7,12 @@
 
 namespace ofd {
 
-// Firmware-side mirror of packages/shared-models's DeviceConfiguration,
-// scoped to what the Core2 itself needs (see docs/PROTOCOL.md's
-// GET/PUT /api/v1/config). Fixed-size buffers only -- no heap string
+// Firmware-side mirror of the device configuration, scoped to what
+// the Core2 itself needs. Fixed-size buffers only — no heap string
 // growth in the config path.
 struct DeviceConfig {
   char deviceId[32] = {0};
   char deviceName[64] = "OpenFlightDisplay";
-
-  bool hasGatewayUrl = false;
-  char gatewayUrl[128] = {0};
 
   bool hasMonitoringArea = false;
   CircleMonitoringArea monitoringArea;
@@ -24,13 +20,11 @@ struct DeviceConfig {
   uint8_t brightness = 200;
 };
 
-// Parses and validates a UTF-8 JSON config payload (the "config" object
-// from PUT /api/v1/config -- see docs/PROTOCOL.md) into `out`. Returns
+// Parses and validates a UTF-8 JSON config payload into `out`. Returns
 // false and writes a short reason into errorOut on any invalid, corrupt,
-// or unsupported-shape input (e.g. a non-circle monitoringArea.kind) --
-// callers must leave any previously-stored config untouched and surface
-// the error rather than partially applying the new one (fail closed, per
-// docs/ARCHITECTURE.md's atomic-config-write requirement).
+// or unsupported-shape input — callers must leave any previously-stored
+// config untouched and surface the error rather than partially applying
+// the new one (fail closed, per docs/ARCHITECTURE.md).
 bool parseAndValidateDeviceConfig(const char* json, size_t len, DeviceConfig& out, char* errorOut,
                                    size_t errorOutLen);
 

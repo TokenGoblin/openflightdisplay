@@ -4,25 +4,116 @@
 #include <qrcode.h>
 
 #include <cstdio>
+#include <cstring>
 
 namespace ofd::app {
 
 namespace {
 
-void drawQrCode(const char* text, int originX, int originY, int moduleSizePx) {
+constexpr int kScreenW = 320;
+constexpr int kScreenH = 240;
+
+// Footer bar
+constexpr int kFooterH = 22;
+constexpr int kFooterY = kScreenH - kFooterH;
+constexpr uint32_t kFooterBg = 0x0841;
+
+// Age colours
+constexpr uint32_t kAgeFreshMs = 5000;
+constexpr uint32_t kAgeStaleMs = 30000;
+constexpr uint32_t kAgeColourFresh = 0x07E0;
+constexpr uint32_t kAgeColourWarn = 0xFFE0;
+constexpr uint32_t kAgeColourCrit = 0xF800;
+
+// Design tokens
+constexpr uint32_t kTextPrimary   = TFT_WHITE;
+constexpr uint32_t kTextLabel     = 0x8410;  // cool grey
+constexpr uint32_t kTextAccent    = 0x0A84FF >> 3; // approximate blue on TFT
+constexpr uint32_t kTextDim       = 0x5280;
+constexpr uint32_t kSepColour     = 0x3186;
+
+uint32_t ageColour(uint32_t ageMs) {
+  if (ageMs <= kAgeFreshMs) return kAgeColourFresh;
+  if (ageMs <= kAgeStaleMs) return kAgeColourWarn;
+  return kAgeColourCrit;
+}
+
+const char* bearingToCompass(double deg) {
+  if (deg < 0.0 || deg >= 360.0) return "—";
+  const char* dirs[] = {"N","NNE","NE","ENE","E","ESE","SE","SSE",
+                         "S","SSW","SW","WSW","W","WNW","NW","NNW"};
+  return dirs[static_cast<int>((deg + 11.25) / 22.5) % 16];
+}
+
+void drawQrCode(const char* text, int ox, int oy, int ms) {
   QRCode qrcode;
-  uint8_t qrcodeBytes[qrcode_getBufferSize(6)];
-  qrcode_initText(&qrcode, qrcodeBytes, 6, ECC_MEDIUM, text);
-  for (uint8_t y = 0; y < qrcode.size; y++) {
-    for (uint8_t x = 0; x < qrcode.size; x++) {
-      const uint16_t color = qrcode_getModule(&qrcode, x, y) ? TFT_BLACK : TFT_WHITE;
-      M5.Display.fillRect(originX + x * moduleSizePx, originY + y * moduleSizePx, moduleSizePx, moduleSizePx,
-                           color);
-    }
+  uint8_t buf[qrcode_getBufferSize(6)];
+  qrcode_initText(&qrcode, buf, 6, ECC_MEDIUM, text);
+  for (uint8_t y = 0; y < qrcode.size; y++)
+    for (uint8_t x = 0; x < qrcode.size; x++)
+      M5.Display.fillRect(ox + x * ms, oy + y * ms, ms, ms,
+                           qrcode_getModule(&qrcode, x, y) ? TFT_BLACK : TFT_WHITE);
+}
+
+void fillRect(int x, int y, int w, int h, uint32_t c) { M5.Display.fillRect(x, y, w, h, c); }
+void dot(int x, int y, int r, uint32_t c)             { M5.Display.fillCircle(x, y, r, c); }
+
+// Small pill label
+void pill(int x, int y, const char* label, bool active) {
+  M5.Display.setTextSize(1);
+  const uint32_t bg = active ? 0x0300 : 0x3000;
+  const uint32_t fg = active ? TFT_GREEN : TFT_RED;
+  const int w = static_cast<int>(std::strlen(label)) * 6 + 12;
+  fillRect(x, y, w, 14, bg);
+  M5.Display.setTextColor(fg, bg);
+  M5.Display.setCursor(x + 4, y + 3);
+  M5.Display.print(label);
+}
+
+// Print a metric row: label (size 1, left) and value (size 2, right)
+void metricRow(int xL, int xR, int y, const char* label, const char* value, uint32_t valColour) {
+  M5.Display.setTextSize(1);
+  M5.Display.setTextColor(kTextLabel, TFT_BLACK);
+  M5.Display.setCursor(xL, y);
+  M5.Display.print(label);
+
+  M5.Display.setTextSize(2);
+  M5.Display.setTextColor(valColour, TFT_BLACK);
+  // Right-align approximate: 12px per char at size 2, 2px padding
+  const int vw = static_cast<int>(std::strlen(value)) * 12;
+  M5.Display.setCursor(xR - vw, y + 2);
+  M5.Display.print(value);
+}
+
+// Print a value with unit, returning the x coordinate of the end of the text.
+// Used for concatenated metrics like "425 kt / 489 mph"
+void printValUnit(int x, int y, const char* val, const char* unit) {
+  M5.Display.setTextSize(2);
+  M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
+  M5.Display.setCursor(x, y);
+  M5.Display.print(val);
+  const int vw = static_cast<int>(std::strlen(val)) * 12;
+  M5.Display.setTextSize(1);
+  M5.Display.setTextColor(kTextLabel, TFT_BLACK);
+  M5.Display.setCursor(x + vw + 3, y + 5);
+  M5.Display.print(unit);
+}
+
+void printClipped(const char* s, int maxChars) {
+  char buf[48];
+  const size_t len = std::strlen(s);
+  if (len > static_cast<size_t>(maxChars)) {
+    std::memcpy(buf, s, maxChars);
+    buf[maxChars] = '\0';
+    M5.Display.print(buf);
+  } else {
+    M5.Display.print(s);
   }
 }
 
 }  // namespace
+
+// ---- public interface ----
 
 void Display::begin() {
   M5.Display.setRotation(1);
@@ -35,145 +126,237 @@ void Display::renderBoot() {
   M5.Display.fillScreen(TFT_BLACK);
   M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
   M5.Display.setTextSize(2);
-  M5.Display.setCursor(20, 100);
+  M5.Display.setCursor(60, 80);
   M5.Display.print("OpenFlightDisplay");
   M5.Display.setTextSize(1);
-  M5.Display.setCursor(20, 130);
-  M5.Display.print("Starting...");
+  M5.Display.setTextColor(kTextLabel, TFT_BLACK);
+  M5.Display.setCursor(100, 120);
+  M5.Display.print("Initializing...");
 }
 
 void Display::renderProvisioning(const char* apName) {
   M5.Display.fillScreen(TFT_BLACK);
+  M5.Display.setTextSize(2);
   M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
-  M5.Display.setTextSize(2);
-  M5.Display.setCursor(10, 20);
-  M5.Display.print("Wi-Fi setup needed");
+  M5.Display.setCursor(40, 40);
+  M5.Display.print("Wi‑Fi Setup");
   M5.Display.setTextSize(1);
-  M5.Display.setCursor(10, 60);
-  M5.Display.print("Connect to Wi-Fi network:");
+  M5.Display.setTextColor(kTextLabel, TFT_BLACK);
+  M5.Display.setCursor(40, 80);
+  M5.Display.print("Connect your phone to:");
+  M5.Display.drawRoundRect(20, 105, kScreenW - 40, 50, 6, kSepColour);
   M5.Display.setTextSize(2);
-  M5.Display.setCursor(10, 80);
-  M5.Display.print(apName);
+  M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
+  char ssidBuf[20]; std::strncpy(ssidBuf, apName, 14); ssidBuf[14]='\0';
+  M5.Display.setCursor(35, 118);
+  M5.Display.print(ssidBuf);
   M5.Display.setTextSize(1);
-  M5.Display.setCursor(10, 120);
-  M5.Display.print("Then browse to 192.168.4.1");
+  M5.Display.setTextColor(kTextLabel, TFT_BLACK);
+  M5.Display.setCursor(40, 180);
+  M5.Display.print("Then open 192.168.4.1");
 }
 
-void Display::renderPairingReady(const char* ipAddress, const char* pairingCode) {
+void Display::renderPairingReady(const char* ip, const char* code) {
   M5.Display.fillScreen(TFT_WHITE);
-  char url[64];
-  std::snprintf(url, sizeof(url), "http://%s/pair?code=%s", ipAddress, pairingCode);
-  drawQrCode(url, 20, 20, 4);
-
-  // Verified on real hardware: the QR code doesn't reliably work either
-  // way (phone camera apps open it as a dead link; in-app scanning needs
-  // HTTPS, which this LAN-over-HTTP system doesn't have -- see
-  // useQrScanner.ts) -- manual entry is the one path that actually works,
-  // so it's what this screen leads with now.
+  char url[64]; std::snprintf(url, sizeof(url), "http://%s/pair?code=%s", ip, code);
+  drawQrCode(url, 12, 30, 4);
   M5.Display.setTextColor(TFT_BLACK, TFT_WHITE);
   M5.Display.setTextSize(1);
-  M5.Display.setCursor(180, 30);
-  M5.Display.print("Enter in the app:");
+  M5.Display.setCursor(180, 32); M5.Display.print("Browse to:");
   M5.Display.setTextSize(2);
-  M5.Display.setCursor(180, 65);
-  M5.Display.print(ipAddress);
-  M5.Display.setCursor(180, 90);
-  M5.Display.print("Code:");
-  M5.Display.setCursor(180, 110);
-  M5.Display.print(pairingCode);
+  char ipBuf[20]; std::strncpy(ipBuf, ip, 15); ipBuf[15]='\0';
+  M5.Display.setCursor(180, 56); M5.Display.print(ipBuf);
+  M5.Display.setCursor(180, 84); M5.Display.print("/setup");
+  M5.Display.setTextSize(1);
+  M5.Display.setTextColor(0x7BEF, TFT_WHITE);
+  M5.Display.setCursor(180, 210); M5.Display.print("Scan QR or type manually");
 }
 
-void Display::renderSingleAircraft(const ofd::AircraftState& aircraft, uint32_t ageSeconds) {
+void Display::renderSingleAircraft(const ofd::AircraftState& ac, uint32_t ageS) {
   M5.Display.fillScreen(TFT_BLACK);
-  M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
 
+  const uint32_t dotColour = ageColour(ageS * 1000);
+
+  // ---- top identity line ----
+  M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
   M5.Display.setTextSize(3);
-  M5.Display.setCursor(10, 10);
-  M5.Display.print(aircraft.hasCallsign ? aircraft.callsign : aircraft.icaoHex);
-
-  M5.Display.setTextSize(2);
-  M5.Display.setCursor(10, 60);
-  if (aircraft.hasDistanceFromObserverKm) {
-    M5.Display.printf("%.1f km", aircraft.distanceFromObserverKm);
-  }
-  if (aircraft.hasBearingFromObserverDeg) {
-    M5.Display.printf("  %03.0f deg", aircraft.bearingFromObserverDeg);
+  M5.Display.setCursor(6, 6);
+  if (ac.hasCallsign) {
+    printClipped(ac.callsign, 14);
+  } else {
+    M5.Display.print(ac.icaoHex);
   }
 
-  M5.Display.setCursor(10, 90);
-  if (aircraft.hasAltitudeFt) {
-    M5.Display.printf("Alt %.0f ft", aircraft.altitudeFt);
-  }
-  if (aircraft.hasVerticalRateFtPerMin) {
-    const char* trend = aircraft.verticalRateFtPerMin > 100    ? " UP"
-                        : aircraft.verticalRateFtPerMin < -100 ? " DOWN"
-                                                                 : " LEVEL";
-    M5.Display.print(trend);
-  }
+  // Age dot (top right)
+  dot(kScreenW - 14, 14, 6, dotColour);
 
-  M5.Display.setCursor(10, 120);
-  if (aircraft.hasGroundSpeedKt) {
-    M5.Display.printf("%.0f kt", aircraft.groundSpeedKt);
-  }
-
+  // Airline name (below callsign, size 1)
   M5.Display.setTextSize(1);
-  M5.Display.setCursor(10, 220);
-  M5.Display.printf("updated %us ago", static_cast<unsigned>(ageSeconds));
-}
-
-void Display::renderStatus(StatusMessage message, const char* ipAddress) {
-  M5.Display.fillScreen(TFT_BLACK);
-  M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
-  M5.Display.setTextSize(2);
-  M5.Display.setCursor(10, 100);
-
-  switch (message) {
-    case StatusMessage::WaitingForFirstData:
-      M5.Display.print("Waiting for first data");
-      break;
-    case StatusMessage::NoMatchingAircraft:
-      M5.Display.print("No matching aircraft");
-      break;
-    case StatusMessage::DataSourceUnavailable:
-      M5.Display.print("Data source unavailable");
-      break;
-    case StatusMessage::WifiDisconnected:
-      M5.Display.print("Wi-Fi disconnected");
-      break;
-    case StatusMessage::ConfigurationRequired:
-      M5.Display.print("Configuration required");
-      break;
-    case StatusMessage::DataIsStale:
-      M5.Display.print("Data is stale");
-      break;
+  if (ac.hasAirlineName) {
+    M5.Display.setTextColor(kTextLabel, TFT_BLACK);
+    M5.Display.setCursor(8, 44);
+    printClipped(ac.airlineName, 24);
   }
 
-  if (ipAddress != nullptr && ipAddress[0] != '\0') {
+  // Aircraft type badge (right side, inline with airline)
+  if (ac.hasAircraftType) {
+    M5.Display.setTextColor(kTextAccent, TFT_BLACK);
+    M5.Display.setCursor(kScreenW - 70, 44);
+    M5.Display.print(ac.aircraftTypeCode);
+  }
+
+  // ---- metric rows ----
+  const int row1Y = 65;
+  const int rowGap = 36;
+  const int xL = 8;
+  const int xR = kScreenW - 8;
+
+  // Row 1: DISTANCE
+  {
+    char buf[24];
+    if (ac.hasDistanceFromObserverKm) std::snprintf(buf, sizeof(buf), "%.1f km", ac.distanceFromObserverKm);
+    else std::snprintf(buf, sizeof(buf), "--");
+    metricRow(xL, xR, row1Y, "DISTANCE", buf, TFT_WHITE);
+  }
+
+  // Row 2: ALTITUDE
+  {
+    char buf[24];
+    if (ac.hasAltitudeFt) std::snprintf(buf, sizeof(buf), "%.0f ft", ac.altitudeFt);
+    else std::snprintf(buf, sizeof(buf), "-- ft");
+    metricRow(xL, xR, row1Y + rowGap, "ALTITUDE", buf, TFT_WHITE);
+  }
+
+  // Row 3: SPEED (knots + mph)
+  {
     M5.Display.setTextSize(1);
-    M5.Display.setCursor(10, 220);
-    M5.Display.printf("Device IP: %s", ipAddress);
+    M5.Display.setTextColor(kTextLabel, TFT_BLACK);
+    M5.Display.setCursor(xL, row1Y + rowGap * 2);
+    M5.Display.print("SPEED");
+
+    if (ac.hasGroundSpeedKt) {
+      M5.Display.setTextSize(2);
+      M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
+      char ktBuf[12], mphBuf[12];
+      std::snprintf(ktBuf, sizeof(ktBuf), "%.0f", ac.groundSpeedKt);
+      std::snprintf(mphBuf, sizeof(mphBuf), "%.0f", ac.groundSpeedMph);
+      const int ktW = static_cast<int>(std::strlen(ktBuf)) * 12;
+      M5.Display.setCursor(xR - ktW - 42, row1Y + rowGap * 2 + 2);
+      M5.Display.print(ktBuf);
+      M5.Display.setTextSize(1);
+      M5.Display.setTextColor(kTextLabel, TFT_BLACK);
+      M5.Display.setCursor(xR - 42, row1Y + rowGap * 2 + 6);
+      M5.Display.print("kt");
+      M5.Display.setTextSize(2);
+      M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
+      M5.Display.setCursor(xR - 24, row1Y + rowGap * 2 + 2);
+      M5.Display.print(" / ");
+      M5.Display.print(mphBuf);
+      M5.Display.setTextSize(1);
+      M5.Display.setTextColor(kTextLabel, TFT_BLACK);
+      M5.Display.print(" mph");
+    } else {
+      metricRow(xL, xR, row1Y + rowGap * 2, "SPEED", "--", TFT_WHITE);
+    }
+  }
+
+  // Row 4: HEADING
+  {
+    char buf[24];
+    if (ac.hasTrackHeadingDeg) {
+      const char* comp = bearingToCompass(ac.trackHeadingDeg);
+      std::snprintf(buf, sizeof(buf), "%.0f° %s", ac.trackHeadingDeg, comp);
+    } else {
+      std::snprintf(buf, sizeof(buf), "--");
+    }
+    // Adjust label position slightly since speed row may be taller
+    const int row4Y = row1Y + rowGap * 3;
+    M5.Display.setTextSize(1);
+    M5.Display.setTextColor(kTextLabel, TFT_BLACK);
+    M5.Display.setCursor(xL, row4Y);
+    M5.Display.print("HEADING");
+    M5.Display.setTextSize(2);
+    M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
+    const int vw = static_cast<int>(std::strlen(buf)) * 12;
+    M5.Display.setCursor(xR - vw, row4Y + 2);
+    M5.Display.print(buf);
+  }
+
+  // ---- footer ----
+  fillRect(0, kFooterY, kScreenW, kFooterH, kFooterBg);
+  pill(4, kFooterY + 4, "WIFI", true);
+  pill(64, kFooterY + 4, "ADS-B", true);
+
+  // Vertical rate indicator in footer
+  M5.Display.setTextSize(1);
+  if (ac.hasVerticalRateFtPerMin) {
+    const char* arrow = "=";
+    uint32_t vc = kTextLabel;
+    if (ac.verticalRateFtPerMin > 500)      { arrow = "\x18"; vc = kAgeColourFresh; }
+    else if (ac.verticalRateFtPerMin < -500) { arrow = "\x19"; vc = kAgeColourCrit; }
+    M5.Display.setTextColor(vc, kFooterBg);
+    M5.Display.setCursor(130, kFooterY + 4);
+    M5.Display.printf("%s %.0f fpm", arrow, ac.verticalRateFtPerMin >= 0 ? ac.verticalRateFtPerMin : -ac.verticalRateFtPerMin);
+  }
+
+  // Emergency indicator (right side of footer)
+  if (ac.emergencyState != ofd::EmergencyState::None) {
+    M5.Display.setTextColor(TFT_RED, kFooterBg);
+    M5.Display.setCursor(240, kFooterY + 4);
+    M5.Display.print("EMERGENCY");
+  } else if (ac.onGround) {
+    M5.Display.setTextColor(kTextLabel, kFooterBg);
+    M5.Display.setCursor(250, kFooterY + 4);
+    M5.Display.print("GND");
   }
 }
 
-void Display::renderIdleClock(const char* timeHhMm, bool wifiConnected, bool gatewayConnected) {
+void Display::renderStatus(StatusMessage message, const char* ip) {
   M5.Display.fillScreen(TFT_BLACK);
-  M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
-  M5.Display.setTextSize(4);
-  M5.Display.setCursor(80, 80);
-  M5.Display.print(timeHhMm);
 
+  const char* label = "";
+  switch (message) {
+    case StatusMessage::WaitingForFirstData:   label = "Connecting to adsb.lol..."; break;
+    case StatusMessage::NoMatchingAircraft:    label = "No aircraft in range";     break;
+    case StatusMessage::DataSourceUnavailable: label = "Data source unavailable";   break;
+    case StatusMessage::WifiDisconnected:      label = "Wi‑Fi disconnected";        break;
+    case StatusMessage::ConfigurationRequired: label = "Setup required";            break;
+    case StatusMessage::DataIsStale:           label = "Position data is stale";   break;
+  }
+
+  M5.Display.drawRoundRect(20, 70, kScreenW - 40, 90, 6, kSepColour);
   M5.Display.setTextSize(1);
-  M5.Display.setCursor(10, 220);
-  M5.Display.printf("Wi-Fi: %s  Gateway: %s", wifiConnected ? "up" : "down", gatewayConnected ? "up" : "down");
+  M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
+  M5.Display.setCursor(35, 95);
+  printClipped(label, 28);
+
+  if (ip && ip[0]) {
+    M5.Display.setTextColor(kTextLabel, TFT_BLACK);
+    M5.Display.setCursor(10, kFooterY - 14);
+    M5.Display.printf("IP: %s", ip);
+  }
+
+  // Footer pill
+  fillRect(0, kFooterY, kScreenW, kFooterH, kFooterBg);
+  pill(4, kFooterY + 4, "WIFI", message != StatusMessage::WifiDisconnected);
 }
 
-void Display::update() {
-  M5.update();
-  // Phase 1's only touch interaction is deferred to Phase 2 (compact
-  // list navigation needs more than one screen to make swipe/tap
-  // gestures meaningful -- see docs/FEATURE_PARITY_MATRIX.md). M5.update()
-  // is still called every loop so touch/button state doesn't go stale
-  // for when that lands.
+void Display::renderIdleClock(const char* timeHhMm, bool wifiUp, bool provUp) {
+  M5.Display.fillScreen(TFT_BLACK);
+  M5.Display.setTextSize(5);
+  M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
+  M5.Display.setCursor(80, 65);
+  M5.Display.print(timeHhMm);
+  M5.Display.drawFastHLine(80, 145, 160, kSepColour);
+  M5.Display.setTextSize(1);
+  M5.Display.setTextColor(kTextLabel, TFT_BLACK);
+  M5.Display.setCursor(95, 160);
+  M5.Display.print("Scanning for aircraft");
+  fillRect(0, kFooterY, kScreenW, kFooterH, kFooterBg);
+  pill(4, kFooterY + 4, "WIFI", wifiUp);
+  pill(64, kFooterY + 4, "ADS-B", provUp);
 }
+
+void Display::update() { M5.update(); }
 
 }  // namespace ofd::app

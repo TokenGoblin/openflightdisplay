@@ -25,12 +25,12 @@ export function DisplayPage({ connection, onReconfigure }: { connection: StoredC
     // bar/toolbar, so content sized to exactly 100vh renders mostly
     // below the visible fold. 100dvh (dynamic viewport height) tracks
     // the actually-visible area instead.
-    <div style={{ display: "flex", flexDirection: "column", height: "100dvh" }}>
+    <div className="display-page">
       <StatusBanner status={status} detail={feed.providerStatus?.message} />
       {!isKiosk ? (
-        <header style={{ display: "flex", justifyContent: "space-between", padding: "0.5rem 1rem" }}>
-          <strong>{connection.deviceName}</strong>
-          <div>
+        <header className="display-page__header">
+          <strong className="display-page__header-name">{connection.deviceName}</strong>
+          <div className="display-page__header-actions">
             <button type="button" onClick={() => setIsKiosk(true)}>
               Full screen
             </button>
@@ -54,16 +54,16 @@ export function DisplayPage({ connection, onReconfigure }: { connection: StoredC
           lets it grow to fit its content (Leaflet's map) instead of
           shrinking to the space flex:1 actually allotted it, pushing
           the map's true rendered size past the visible area. */}
-      <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
-        <div style={{ flex: 2, minWidth: 0, position: "relative" }}>
+      <div className="display-page__content">
+        <div className="display-page__map-area">
           <AircraftMap area={fallbackArea} aircraft={feed.aircraft} />
         </div>
-        <div style={{ flex: 1, padding: "1rem", overflow: "auto" }}>
+        <div className="display-page__sidebar">
           {nearest ? <AircraftCard aircraft={nearest} lastUpdatedAt={feed.lastUpdatedAt} /> : null}
         </div>
       </div>
       {isKiosk ? (
-        <button type="button" style={{ position: "fixed", bottom: 8, right: 8 }} onClick={() => setIsKiosk(false)}>
+        <button type="button" className="display-page__kiosk-exit" onClick={() => setIsKiosk(false)}>
           Exit full screen
         </button>
       ) : null}

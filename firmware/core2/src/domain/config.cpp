@@ -21,20 +21,10 @@ bool copyBounded(const char* src, char* dst, size_t dstLen) {
 }
 }  // namespace
 
-// Bounded to 512 bytes -- a Phase 1 config payload (device name, gateway
-// URL, one circular area) comfortably fits well under that; a larger
-// payload is rejected outright rather than growing the buffer, per
-// docs/CORE2_HARDWARE.md's "no unbounded allocation" rule.
 constexpr size_t kConfigJsonCapacity = 512;
 
-// File-scope (not function-local) statics -- see the detailed note in
-// domain/protocol.cpp on why a *function-local* static of a non-POD
-// ArduinoJson type is itself a stack-overflow risk (its lazy-init guard
-// registers an atexit handler on first use, which was enough on its own
-// to blow the stack in a deep call chain). These are constructed once at
-// startup instead. Two separate instances (parse vs. serialize) since
-// they're never needed at the same time but keeping them distinct avoids
-// any risk of one function's leftover state bleeding into the other.
+// File-scope statics to avoid atexit/lazy-init stack overflow
+// (see detailed note in domain/protocol.cpp).
 static StaticJsonDocument<kConfigJsonCapacity> g_configParseDoc;
 static StaticJsonDocument<kConfigJsonCapacity> g_configSerializeDoc;
 
@@ -54,26 +44,21 @@ bool parseAndValidateDeviceConfig(const char* json, size_t len, DeviceConfig& ou
 
   DeviceConfig parsed;
 
-  const char* deviceId = doc["deviceId"] | "";
-  if (!copyBounded(deviceId, parsed.deviceId, sizeof(parsed.deviceId))) {
-    setError(errorOut, errorOutLen, "deviceId missing or too long");
-    return false;
-  }
-
-  const char* deviceName = doc["deviceName"] | "OpenFlightDisplay";
-  if (!copyBounded(deviceName, parsed.deviceName, sizeof(parsed.deviceName))) {
-    setError(errorOut, errorOutLen, "deviceName empty or too long");
-    return false;
-  }
-
-  if (doc.containsKey("gatewayUrl")) {
-    const char* url = doc["gatewayUrl"] | "";
-    const bool looksLikeWsUrl = std::strncmp(url, "ws://", 5) == 0 || std::strncmp(url, "wss://", 6) == 0;
-    if (!looksLikeWsUrl || !copyBounded(url, parsed.gatewayUrl, sizeof(parsed.gatewayUrl))) {
-      setError(errorOut, errorOutLen, "gatewayUrl must be a ws:// or wss:// URL");
+  // deviceId is optional — if missing, we keep the existing one
+  if (doc.containsKey("deviceId")) {
+    const char* deviceId = doc["deviceId"] | "";
+    if (!copyBounded(deviceId, parsed.deviceId, sizeof(parsed.deviceId))) {
+      setError(errorOut, errorOutLen, "deviceId missing or too long");
       return false;
     }
-    parsed.hasGatewayUrl = true;
+  }
+
+  if (doc.containsKey("deviceName")) {
+    const char* deviceName = doc["deviceName"] | "";
+    if (!copyBounded(deviceName, parsed.deviceName, sizeof(parsed.deviceName))) {
+      setError(errorOut, errorOutLen, "deviceName empty or too long");
+      return false;
+    }
   }
 
   if (doc.containsKey("monitoringArea")) {
@@ -130,7 +115,6 @@ size_t serializeDeviceConfig(const DeviceConfig& config, char* buf, size_t bufLe
   doc.clear();
   doc["deviceId"] = config.deviceId;
   doc["deviceName"] = config.deviceName;
-  if (config.hasGatewayUrl) doc["gatewayUrl"] = config.gatewayUrl;
 
   if (config.hasMonitoringArea) {
     JsonObject area = doc.createNestedObject("monitoringArea");

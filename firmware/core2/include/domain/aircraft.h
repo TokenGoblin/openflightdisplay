@@ -5,8 +5,6 @@
 
 namespace ofd {
 
-// Bounded, per docs/PROTOCOL.md ("aircraft-update.aircraft is capped at a
-// fixed maximum length -- Phase 1: 10").
 constexpr size_t kMaxAircraftPerUpdate = 10;
 
 enum class EmergencyState : uint8_t {
@@ -19,16 +17,21 @@ enum class EmergencyState : uint8_t {
   Downed,
 };
 
-// Deliberately a *subset* of the full AircraftState model in
-// packages/shared-models -- only the fields the Phase 1 single-aircraft
-// Core2 screen actually renders or reasons about (ranking, staleness).
-// Extra fields present in an incoming message are simply ignored during
-// parsing (see domain/protocol.cpp), not stored.
+// Full aircraft state with all available ADS‑B fields.
+// Fixed-size buffers only — no heap allocation.
 struct AircraftState {
-  char icaoHex[7] = {0};  // 6 lowercase hex chars + NUL
-
+  char icaoHex[7] = {0};
   bool hasCallsign = false;
   char callsign[17] = {0};
+
+  // Resolved airline info (populated during parsing)
+  bool hasAirlineName = false;
+  char airlineName[40] = {0};
+  char airlineIcao[4] = {0};
+
+  // Aircraft type code (e.g. "B738", "A320") from adsb.lol field `t`
+  bool hasAircraftType = false;
+  char aircraftTypeCode[8] = {0};
 
   double latitude = 0.0;
   double longitude = 0.0;
@@ -39,18 +42,30 @@ struct AircraftState {
   bool hasGroundSpeedKt = false;
   double groundSpeedKt = 0.0;
 
+  // Computed once during parsing: speedKt × 1.15078
+  bool hasGroundSpeedMph = false;
+  double groundSpeedMph = 0.0;
+
+  // Track/heading from adsb.lol field `track`
+  bool hasTrackHeadingDeg = false;
+  double trackHeadingDeg = 0.0;
+
   bool hasVerticalRateFtPerMin = false;
   double verticalRateFtPerMin = 0.0;
+
+  bool hasSquawk = false;
+  char squawk[5] = {0};
 
   bool onGround = false;
   EmergencyState emergencyState = EmergencyState::None;
 
+  // Computed by ranking (distance/bearing from observer location)
   bool hasDistanceFromObserverKm = false;
   double distanceFromObserverKm = 0.0;
-
   bool hasBearingFromObserverDeg = false;
   double bearingFromObserverDeg = 0.0;
 
+  // Unix epoch ms — set to time(nullptr)*1000 by the provider
   int64_t positionTimestampMs = 0;
 };
 

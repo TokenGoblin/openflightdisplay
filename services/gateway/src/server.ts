@@ -7,13 +7,14 @@ import type { Logger } from "./lib/logger.js";
 import type { DeviceStore } from "./lib/deviceStore.js";
 import { Poller } from "./lib/poller.js";
 import { createProvider } from "./providers/index.js";
-import { registerAircraftWebsocket } from "./ws/aircraftSocket.js";
+import { registerAircraftWebsocket, type AircraftWebsocketHandle } from "./ws/aircraftSocket.js";
 import { registerDeviceRoutes } from "./routes/devices.js";
 import { registerStatusRoute } from "./routes/status.js";
 
 export interface BuildAppResult {
   app: FastifyInstance;
   poller: Poller;
+  websocket: AircraftWebsocketHandle;
 }
 
 export async function buildApp(env: GatewayEnv, logger: Logger, deviceStore: DeviceStore): Promise<BuildAppResult> {
@@ -60,5 +61,5 @@ export async function buildApp(env: GatewayEnv, logger: Logger, deviceStore: Dev
   registerDeviceRoutes(app, { deviceStore, logger });
   registerStatusRoute(app, { poller, websocket });
 
-  return { app, poller };
+  return { app, poller, websocket };
 }

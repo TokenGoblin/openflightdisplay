@@ -16,7 +16,7 @@ async function main(): Promise<void> {
   const deviceStore = new DeviceStore(env.DEVICE_STORE_PATH, logger);
   await deviceStore.load();
 
-  const { app, poller } = await buildApp(env, logger, deviceStore);
+  const { app, poller, websocket } = await buildApp(env, logger, deviceStore);
 
   poller.start();
 
@@ -27,6 +27,7 @@ async function main(): Promise<void> {
     process.on(signal, () => {
       logger.info({ signal }, "shutting down");
       poller.stop();
+      websocket.destroy();
       void app.close().then(() => process.exit(0));
     });
   }
