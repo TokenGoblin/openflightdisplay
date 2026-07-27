@@ -625,7 +625,14 @@ void registerPairingRoutes(AsyncWebServer& server, AppContext& ctx) {
       if (index + len < total) return;
       g_bodyBuffer[total] = '\0';
 
+      // Seeded with the device's own hardware identity so a PUT that
+      // omits "deviceId" (e.g. one that only updates monitoringArea or
+      // brightness) still validates -- parseAndValidateDeviceConfig
+      // keeps whatever `parsed.deviceId` already holds when the payload
+      // doesn't specify one, and now requires the *result* to be
+      // non-empty rather than silently accepting no deviceId at all.
       DeviceConfig parsed;
+      std::strncpy(parsed.deviceId, ctx.deviceId, sizeof(parsed.deviceId) - 1);
       char error[64] = {0};
       bool ok = false;
 
@@ -639,9 +646,6 @@ void registerPairingRoutes(AsyncWebServer& server, AppContext& ctx) {
       }
 
       if (!ok) { sendJsonError(r, 400, error[0] ? error : "invalid_config"); return; }
-      if (parsed.deviceId[0] == '\0') {
-        std::strncpy(parsed.deviceId, ctx.deviceId, sizeof(parsed.deviceId) - 1);
-      }
 
       ctx.config = parsed;
       ctx.hasConfig = true;

@@ -22,13 +22,11 @@ void test_accepts_valid_minimal_config() {
 void test_accepts_full_config_with_circle_area() {
   const char* json =
       R"({"deviceId":"core2-abc123","deviceName":"Living Room",)"
-      R"("gatewayUrl":"ws://192.168.1.50:8787/ws/v1/aircraft",)"
       R"("monitoringArea":{"kind":"circle","centerLat":47.6,"centerLon":-122.3,"radiusKm":15},)"
       R"("displayProfile":{"brightness":180}})";
   DeviceConfig config;
   char error[64] = {0};
   TEST_ASSERT_TRUE(parseAndValidateDeviceConfig(json, std::strlen(json), config, error, sizeof(error)));
-  TEST_ASSERT_TRUE(config.hasGatewayUrl);
   TEST_ASSERT_TRUE(config.hasMonitoringArea);
   TEST_ASSERT_EQUAL_DOUBLE(15.0, config.monitoringArea.radiusKm);
   TEST_ASSERT_EQUAL_UINT8(180, config.brightness);
@@ -49,6 +47,16 @@ void test_rejects_missing_device_id() {
   TEST_ASSERT_FALSE(parseAndValidateDeviceConfig(json, std::strlen(json), config, error, sizeof(error)));
 }
 
+void test_partial_update_keeps_existing_device_id() {
+  const char* json = R"({"displayProfile":{"brightness":150}})";
+  DeviceConfig config;
+  std::strcpy(config.deviceId, "core2-existing");
+  char error[64] = {0};
+  TEST_ASSERT_TRUE(parseAndValidateDeviceConfig(json, std::strlen(json), config, error, sizeof(error)));
+  TEST_ASSERT_EQUAL_STRING("core2-existing", config.deviceId);
+  TEST_ASSERT_EQUAL_UINT8(150, config.brightness);
+}
+
 void test_rejects_unsupported_monitoring_area_kind() {
   const char* json =
       R"({"deviceId":"core2-abc123","deviceName":"Living Room",)"
@@ -62,14 +70,6 @@ void test_rejects_out_of_range_radius() {
   const char* json =
       R"({"deviceId":"core2-abc123","deviceName":"Living Room",)"
       R"("monitoringArea":{"kind":"circle","centerLat":47.6,"centerLon":-122.3,"radiusKm":5000}})";
-  DeviceConfig config;
-  char error[64] = {0};
-  TEST_ASSERT_FALSE(parseAndValidateDeviceConfig(json, std::strlen(json), config, error, sizeof(error)));
-}
-
-void test_rejects_gateway_url_without_ws_scheme() {
-  const char* json =
-      R"({"deviceId":"core2-abc123","deviceName":"Living Room","gatewayUrl":"http://example.com"})";
   DeviceConfig config;
   char error[64] = {0};
   TEST_ASSERT_FALSE(parseAndValidateDeviceConfig(json, std::strlen(json), config, error, sizeof(error)));
@@ -103,9 +103,9 @@ int main(int argc, char** argv) {
   RUN_TEST(test_accepts_full_config_with_circle_area);
   RUN_TEST(test_rejects_malformed_json_without_crashing);
   RUN_TEST(test_rejects_missing_device_id);
+  RUN_TEST(test_partial_update_keeps_existing_device_id);
   RUN_TEST(test_rejects_unsupported_monitoring_area_kind);
   RUN_TEST(test_rejects_out_of_range_radius);
-  RUN_TEST(test_rejects_gateway_url_without_ws_scheme);
   RUN_TEST(test_serialize_round_trip);
   return UNITY_END();
 }

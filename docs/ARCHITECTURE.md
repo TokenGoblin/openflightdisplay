@@ -45,7 +45,7 @@ This also means: swapping or adding a provider touches one file in `services/gat
 
 Browsers cannot browse mDNS services (there is no web-platform API for it), so the design does not depend on that:
 
-1. **Core2 first boot**: no saved Wi-Fi credentials → starts a SoftAP (`OpenFlightDisplay-Setup-XXXX`) with a captive-portal HTTP server (ESPAsyncWebServer + DNSServer) serving a minimal Wi-Fi-credential form.
+1. **Core2 first boot**: no saved Wi-Fi credentials → starts a SoftAP (`OFD-Setup-XXXXXX`) with a captive-portal HTTP server (ESPAsyncWebServer + DNSServer) serving a minimal Wi-Fi-credential form (with a network scan/picker, `GET /wifi-scan`).
 2. Core2 joins the home Wi-Fi, reboots into station mode, and starts:
    - an mDNS responder (`_openflightdisplay._tcp`) — a real capability on ESP32, even though browsers can't consume it directly;
    - its own small local HTTP server exposing pairing/config/status endpoints (see `docs/PROTOCOL.md`);

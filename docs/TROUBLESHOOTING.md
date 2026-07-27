@@ -58,7 +58,7 @@ Check for:
 
 - The Core2 only supports WPA2 networks (WPA3 support is an ESP32 SDK capability but unverified on this hardware).
 - Hidden SSIDs are not supported.
-- If the SoftAP (`OpenFlightDisplay-Setup-XXXX`) doesn't appear, press-and-hold the Core2's power button for ~6 seconds to force a hard reset (this clears the saved Wi-Fi and restarts provisioning).
+- If the SoftAP (`OFD-Setup-XXXXXX`) doesn't appear, press-and-hold the Core2's power button for ~6 seconds to force a hard reset (this clears the saved Wi-Fi and restarts provisioning).
 
 ### "Blank screen / frozen display"
 

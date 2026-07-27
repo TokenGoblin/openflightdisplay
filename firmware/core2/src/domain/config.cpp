@@ -44,13 +44,19 @@ bool parseAndValidateDeviceConfig(const char* json, size_t len, DeviceConfig& ou
 
   DeviceConfig parsed;
 
-  // deviceId is optional — if missing, we keep the existing one
+  // deviceId is optional in the payload -- if missing, fall back to
+  // whatever `out` already held (a partial PUT that only touches, say,
+  // brightness shouldn't have to resend it). What's not optional is the
+  // *result*: a config with no deviceId at all (neither supplied nor
+  // pre-existing) is rejected below, rather than silently persisted.
   if (doc.containsKey("deviceId")) {
     const char* deviceId = doc["deviceId"] | "";
     if (!copyBounded(deviceId, parsed.deviceId, sizeof(parsed.deviceId))) {
       setError(errorOut, errorOutLen, "deviceId missing or too long");
       return false;
     }
+  } else if (out.deviceId[0] != '\0') {
+    std::strncpy(parsed.deviceId, out.deviceId, sizeof(parsed.deviceId) - 1);
   }
 
   if (doc.containsKey("deviceName")) {
@@ -104,6 +110,11 @@ bool parseAndValidateDeviceConfig(const char* json, size_t len, DeviceConfig& ou
       return false;
     }
     parsed.brightness = static_cast<uint8_t>(brightness);
+  }
+
+  if (parsed.deviceId[0] == '\0') {
+    setError(errorOut, errorOutLen, "deviceId missing or too long");
+    return false;
   }
 
   out = parsed;

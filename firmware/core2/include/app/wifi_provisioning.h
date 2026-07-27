@@ -30,6 +30,19 @@ void startProvisioningAccessPoint(AsyncWebServer& server, const char* apName);
 // captive-portal DNS redirect keeps working.
 void processProvisioningDns();
 
+// True exactly once after the /wifi-setup form has actually been
+// submitted and new credentials saved -- and false every other time,
+// including while a device that was already configured is sitting in
+// provisioning mode because its previously-saved network just isn't in
+// range right now. That distinction matters: main.cpp reboots shortly
+// after this returns true (to pick up the new credentials on a clean
+// boot), so basing it on "a credentials file merely exists on disk"
+// instead would reboot in a tight loop forever whenever the saved
+// network is temporarily unreachable, without ever actually showing the
+// setup portal. Consuming (one-shot) so a slow poller can't act on the
+// same submission twice.
+bool consumeWifiCredentialsJustSaved();
+
 // Attempts to join `creds` in station mode, blocking up to `timeoutMs`.
 // Returns true on success. On repeated failure, callers should fall back
 // to startProvisioningAccessPoint() again rather than retrying forever

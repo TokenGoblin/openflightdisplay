@@ -18,7 +18,7 @@ No screenshots yet — no UI/photography review pass has been done this session;
 
 ## Supported hardware
 
-- **M5Stack Core2** (ESP32, 320×240 capacitive touchscreen) — tested on a real ESP32-D0WDQ6 v3.0 unit (16MB flash, no PSRAM). See `docs/CORE2_HARDWARE.md` for the memory budget and exactly what's been confirmed on real hardware vs. still estimated.
+- **M5Stack Core2** (ESP32, 320×240 capacitive touchscreen) — tested on a real ESP32-D0WDQ6 v3.0 unit (16MB flash, no PSRAM). See `docs/CORE2_HARDWARE.md` for the memory budget and exactly what's been confirmed on real hardware vs. still estimated, and `docs/CORE2_DISPLAY.md` for the on-device airport-FIDS screen design (layout, fonts/licensing, color tokens, screen states, rendering strategy).
 - Any modern tablet/phone/desktop browser for the PWA (installable; works standalone without a Core2 as long as a gateway is reachable).
 - Any small Linux machine / Raspberry Pi / Docker host / plain laptop to run the gateway.
 

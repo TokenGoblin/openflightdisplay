@@ -4,9 +4,9 @@ See `docs/ARCHITECTURE.md` § "Discovery and pairing flow" for the high-level ra
 
 ## First-time setup (user's perspective)
 
-1. Power on the Core2. If it has no saved Wi-Fi credentials, its screen shows: "Connect to Wi-Fi network `OpenFlightDisplay-Setup-XXXX` to continue," where `XXXX` is derived from its device ID.
+1. Power on the Core2. If it has no saved Wi-Fi credentials, its screen shows: "Connect to Wi-Fi network `OFD-Setup-XXXXXX` to continue," where `XXXXXX` is derived from its device ID.
 2. On a phone or tablet, join that Wi-Fi network. Most devices will auto-open a captive-portal page; if not, browse to `http://192.168.4.1/`.
-3. Enter the home Wi-Fi SSID and password on that page. Submit.
+3. On that page, tap "Scan for networks" to pick the home Wi-Fi network from a list (signal strength + lock icon for secured networks), or type the SSID directly if it doesn't show up (e.g. a hidden network). Enter the password and submit. Scanning briefly interrupts the phone's connection to the Core2's setup network while it happens (the ESP32 has one radio for both) — it reconnects on its own; if it doesn't, rejoin the network and reload the page.
 4. The Core2 attempts to join the home network. On success, it reboots into station mode and shows its assigned IP, a 6-digit pairing code, and a QR code encoding both — and stays on that screen until it's paired.
 5. Open the OpenFlightDisplay tablet PWA, choose "Add Display," and **type in the IP + code manually** (the default and recommended path). Scanning the QR code is offered too, but confirmed via real hardware testing not to work in a normal deployment: a phone's camera app just opens it as a plain link, and the PWA's own in-app scanner needs a secure (HTTPS) context that this LAN-over-HTTP system doesn't have — see `docs/ARCHITECTURE.md` for why. If you scan it anyway, the Core2 now shows an explanatory page telling you to enter the details manually instead of a dead link.
 6. The PWA claims the pairing code (single-use, 10-minute expiry) and receives a pairing token.

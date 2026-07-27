@@ -10,6 +10,12 @@ namespace ofd::app {
 
 enum class WifiState { Disconnected, Provisioning, Connected };
 
+// Which of the 3 bottom-button pages is currently selected -- BtnA/BtnB/
+// BtnC in main.cpp's loop() cycle this directly (not prev/next) so each
+// physical button always means the same page. See docs/CORE2_DISPLAY.md
+// "Page navigation".
+enum class DetailPage : uint8_t { Flight, Detail, System };
+
 // Central, in-RAM view of device state, shared by reference across the
 // app-layer modules (pairing server, adsb provider, display, main
 // loop) so none of them need to independently reload from LittleFS on
@@ -38,6 +44,14 @@ struct AppContext {
   PairingCodeManager pairingCodeManager;
 
   WifiState wifiState = WifiState::Disconnected;
+  // Live WiFi.status() reading, refreshed periodically by main.cpp's loop()
+  // while wifiState == Connected. Distinct from wifiState, which only
+  // tracks the boot-time provisioning/connect phase and is never
+  // downgraded again once connected -- this field is what the header's
+  // Wi-Fi icon and the WIFI OFFLINE screen actually key off of.
+  bool wifiConnected = false;
+
+  DetailPage currentPage = DetailPage::Flight;
 
   AircraftList latestAircraft;
   bool hasLatestAircraft = false;

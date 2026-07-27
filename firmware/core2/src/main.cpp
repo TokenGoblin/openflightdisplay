@@ -31,16 +31,24 @@ AdsbProvider g_adsbProvider;
 bool g_wifiJustSaved = false;
 uint32_t g_wifiJustSavedAtMs = 0;
 uint32_t g_lastPairingCodeRegenAtMs = 0;
-uint32_t g_lastWifiCredsCheckAtMs = 0;
 
 constexpr uint32_t kWifiConnectTimeoutMs = 15000;
 constexpr uint32_t kWifiSaveRebootDelayMs = 1500;
-constexpr uint32_t kWifiCredsCheckIntervalMs = 1000;
 constexpr uint32_t kRenderIntervalMs = 5000;
 constexpr uint32_t kOtaHandleIntervalMs = 200;
+constexpr uint32_t kWifiStatusCheckIntervalMs = 2000;
+// A stale-but-still-shown aircraft (docs/CORE2_DISPLAY.md's "preserve,
+// don't hide" rule) is only kept on screen up to this long past its last
+// update. Well beyond kStalePositionThresholdMs so a normal short gap
+// between polls never triggers it -- this is specifically for "the
+// provider's been reporting Ok health but we haven't actually heard
+// about this aircraft in minutes," at which point showing it as if it
+// might still be nearby would be actively misleading.
+constexpr uint32_t kSuperStaleMs = static_cast<uint32_t>(ofd::kStalePositionThresholdMs) * 5;
 
 uint32_t g_lastRenderAtMs = 0;
 uint32_t g_lastOtaAtMs = 0;
+uint32_t g_lastWifiStatusCheckAtMs = 0;
 
 bool g_otaInProgress = false;
 uint8_t g_otaPercent = 0;
@@ -105,7 +113,7 @@ void initOta() {
 
 void enterProvisioningMode() {
   char apName[32];
-  std::snprintf(apName, sizeof(apName), "OpenFlightDisplay-Setup-%s", g_ctx.deviceId + 6);
+  std::snprintf(apName, sizeof(apName), "OFD-Setup-%s", g_ctx.deviceId + 6);
   startProvisioningAccessPoint(g_server, apName);
   g_ctx.wifiState = WifiState::Provisioning;
   g_display.renderProvisioning(apName);
@@ -120,6 +128,7 @@ void startDataSource() {
 
 void enterConnectedMode() {
   g_ctx.wifiState = WifiState::Connected;
+  g_ctx.wifiConnected = true;
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
   MDNS.begin(g_ctx.deviceId);
   MDNS.addService("openflightdisplay", "tcp", 80);
@@ -133,7 +142,7 @@ void enterConnectedMode() {
   if (!g_ctx.hasConfig || !g_ctx.config.hasMonitoringArea) {
     g_ctx.pairingCodeManager.regenerate(millis());
     g_lastPairingCodeRegenAtMs = millis();
-    g_display.renderPairingReady(WiFi.localIP().toString().c_str(), g_ctx.pairingCodeManager.currentCode());
+    g_display.renderLocationRequired(WiFi.localIP().toString().c_str(), g_ctx.pairingCodeManager.currentCode());
   } else {
     startDataSource();
   }
@@ -142,12 +151,17 @@ void enterConnectedMode() {
 void renderCurrentState() {
   if (g_ctx.wifiState == WifiState::Provisioning) return;
 
+  if (!g_ctx.wifiConnected) {
+    g_display.renderWifiOffline();
+    return;
+  }
+
   if (!g_ctx.hasConfig || !g_ctx.config.hasMonitoringArea) {
     if (millis() - g_lastPairingCodeRegenAtMs > PairingCodeManager::kExpiryMs) {
       g_ctx.pairingCodeManager.regenerate(millis());
       g_lastPairingCodeRegenAtMs = millis();
-      g_display.renderPairingReady(WiFi.localIP().toString().c_str(), g_ctx.pairingCodeManager.currentCode());
     }
+    g_display.renderLocationRequired(WiFi.localIP().toString().c_str(), g_ctx.pairingCodeManager.currentCode());
     return;
   }
 
@@ -155,37 +169,70 @@ void renderCurrentState() {
     startDataSource();
   }
 
+  // SYSTEM tab is always renderable regardless of aircraft/provider
+  // state -- in fact it's most useful exactly when something else here
+  // is wrong, so it takes priority over the provider-health/aircraft
+  // checks below rather than being blocked by them.
+  if (g_ctx.currentPage == DetailPage::System) {
+    g_display.renderSystemInfo();
+    return;
+  }
+
   if (g_ctx.providerHealth == ProviderHealth::Unavailable) {
-    g_display.renderStatus(StatusMessage::DataSourceUnavailable);
+    g_display.renderApiError();
     return;
   }
 
   if (!g_ctx.hasLatestAircraft) {
-    g_display.renderStatus(StatusMessage::WaitingForFirstData);
+    g_display.renderSearching();
     return;
   }
 
+  const uint32_t sinceUpdateMs = millis() - g_ctx.lastAircraftUpdateAtMs;
+
   if (g_ctx.latestAircraft.count == 0) {
-    if (ntpTimeIsPlausible()) {
+    if (sinceUpdateMs > kSuperStaleMs) {
+      g_display.renderApiError();
+      return;
+    }
+    if (g_ctx.currentPage == DetailPage::Detail) {
+      g_display.renderDetailPlaceholder();
+      return;
+    }
+    const bool hasClock = ntpTimeIsPlausible();
+    char timeBuf[6] = {0};
+    if (hasClock) {
       const time_t now = time(nullptr);
       const struct tm* t = localtime(&now);
-      char timeBuf[6];
       std::snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", t->tm_hour, t->tm_min);
-      g_display.renderIdleClock(timeBuf, g_ctx.wifiState == WifiState::Connected, g_ctx.providerStarted);
-    } else {
-      g_display.renderStatus(StatusMessage::NoMatchingAircraft);
     }
+    g_display.renderNoTraffic(hasClock, timeBuf);
     return;
   }
 
   const AircraftState& nearest = g_ctx.latestAircraft.items[0];
-  if (ntpTimeIsPlausible() && isStalePosition(nearest.positionTimestampMs, static_cast<int64_t>(time(nullptr)) * 1000)) {
-    g_display.renderStatus(StatusMessage::DataIsStale);
+  const bool stale = ntpTimeIsPlausible() &&
+                      isStalePosition(nearest.positionTimestampMs, static_cast<int64_t>(time(nullptr)) * 1000);
+
+  if (stale && sinceUpdateMs > kSuperStaleMs) {
+    // Stale for far longer than one missed poll -- stop showing a
+    // possibly very old aircraft and fall back to "still searching"
+    // instead, per docs/CORE2_DISPLAY.md's staleness rule (preserve
+    // briefly, don't preserve indefinitely).
+    if (g_ctx.currentPage == DetailPage::Detail) {
+      g_display.renderDetailPlaceholder();
+      return;
+    }
+    g_display.renderSearching();
     return;
   }
 
-  const uint32_t ageSeconds = (millis() - g_ctx.lastAircraftUpdateAtMs) / 1000;
-  g_display.renderSingleAircraft(nearest, ageSeconds);
+  const uint32_t ageSeconds = sinceUpdateMs / 1000;
+  if (g_ctx.currentPage == DetailPage::Detail) {
+    g_display.renderAircraftDetail(nearest, ageSeconds, stale);
+  } else {
+    g_display.renderAircraft(nearest, ageSeconds, stale);
+  }
 }
 
 }  // namespace
@@ -200,7 +247,7 @@ void setup() {
   M5.begin(cfg);
   g_display.begin();
   s_ctx = &g_ctx;
-  g_display.renderBoot();
+  g_display.renderBoot(g_ctx.firmwareVersion);
 
   LittleFS.begin(/*formatOnFail=*/true);
 
@@ -234,17 +281,52 @@ void loop() {
   if (g_ctx.wifiState == WifiState::Provisioning) {
     processProvisioningDns();
 
-    if (!g_wifiJustSaved && millis() - g_lastWifiCredsCheckAtMs >= kWifiCredsCheckIntervalMs) {
-      g_lastWifiCredsCheckAtMs = millis();
-      WifiCredentials creds;
-      if (loadWifiCredentials(creds)) {
-        g_wifiJustSaved = true;
-        g_wifiJustSavedAtMs = millis();
-      }
+    // Reboot only once the setup form has actually been submitted --
+    // NOT merely because a credentials file exists on disk. A device
+    // that was previously configured and is simply out of range of its
+    // saved network also ends up here with a perfectly real wifi.json
+    // already present; treating "file exists" as "just saved" would
+    // reboot in a tight loop every ~1.5s forever instead of ever
+    // showing the setup portal (found by actually testing this on
+    // hardware away from the originally-paired network).
+    if (!g_wifiJustSaved && consumeWifiCredentialsJustSaved()) {
+      g_wifiJustSaved = true;
+      g_wifiJustSavedAtMs = millis();
     } else if (g_wifiJustSaved && millis() - g_wifiJustSavedAtMs > kWifiSaveRebootDelayMs) {
       ESP.restart();
     }
     return;
+  }
+
+  // Bottom-button page navigation: BtnA/BtnB/BtnC each jump directly to
+  // a specific page (FLIGHT/DETAIL/SYSTEM) rather than prev/next, so a
+  // given physical button always means the same thing. M5.update()
+  // (called via g_display.update() at the top of loop()) is what
+  // actually refreshes M5.BtnX's pressed state from the touch panel.
+  // Re-renders immediately on a page change instead of waiting up to
+  // kRenderIntervalMs so button presses feel responsive.
+  DetailPage requestedPage = g_ctx.currentPage;
+  if (M5.BtnA.wasPressed()) requestedPage = DetailPage::Flight;
+  if (M5.BtnB.wasPressed()) requestedPage = DetailPage::Detail;
+  if (M5.BtnC.wasPressed()) requestedPage = DetailPage::System;
+  if (requestedPage != g_ctx.currentPage) {
+    g_ctx.currentPage = requestedPage;
+    renderCurrentState();
+    g_lastRenderAtMs = millis();
+  }
+
+  // Detect a Wi-Fi drop after the initial connect -- WiFi.status() is
+  // cheap, so this just needs throttling to avoid spamming it every
+  // loop() iteration. ESP32 Arduino's WiFi does not auto-reconnect on
+  // its own, hence the explicit WiFi.reconnect() call.
+  if (millis() - g_lastWifiStatusCheckAtMs >= kWifiStatusCheckIntervalMs) {
+    g_lastWifiStatusCheckAtMs = millis();
+    const bool nowConnected = WiFi.status() == WL_CONNECTED;
+    if (g_ctx.wifiConnected && !nowConnected) {
+      Serial.println("WiFi link dropped -- attempting reconnect");
+      WiFi.reconnect();
+    }
+    g_ctx.wifiConnected = nowConnected;
   }
 
   // Poll battery in the background (~10 s interval, throttled internally)
