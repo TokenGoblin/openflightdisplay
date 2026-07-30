@@ -2,6 +2,7 @@
 
 #include "app/config_store.h"
 #include "app/device_identity.h"
+#include "app/page.h"
 #include "domain/battery.h"
 #include "domain/config.h"
 #include "domain/protocol.h"
@@ -9,12 +10,6 @@
 namespace ofd::app {
 
 enum class WifiState { Disconnected, Provisioning, Connected };
-
-// Which of the 3 bottom-button pages is currently selected -- BtnA/BtnB/
-// BtnC in main.cpp's loop() cycle this directly (not prev/next) so each
-// physical button always means the same page. See docs/CORE2_DISPLAY.md
-// "Page navigation".
-enum class DetailPage : uint8_t { Flight, Detail, System };
 
 // Central, in-RAM view of device state, shared by reference across the
 // app-layer modules (pairing server, adsb provider, display, main
@@ -31,6 +26,8 @@ enum class DetailPage : uint8_t { Flight, Detail, System };
 // not a crash. Revisit with a real mutex if a future change makes these
 // updates more frequent or more consequential to get wrong.
 struct AppContext {
+  // "<board-prefix>-8a2f19" -- see ofd::board::kDeviceIdPrefix and
+  // getDeviceId().
   char deviceId[20] = {0};
   const char* firmwareVersion = "0.1.0";
 

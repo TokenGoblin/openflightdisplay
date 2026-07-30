@@ -19,19 +19,20 @@
 └───────────────┬───────────────────────────────┬────────────────┘
                 │ plain WS/HTTP, LAN only        │ plain WS/HTTP, LAN or same-origin
                 ▼                                ▼
-   ┌─────────────────────────┐        ┌────────────────────────────┐
-   │  firmware/core2 (ESP32)  │        │  apps/tablet-pwa (React)    │
+   ┌──────────────────────────┐        ┌────────────────────────────┐
+   │ firmware/display         │        │  apps/tablet-pwa (React)    │
+   │  (Core2 / Tab5)          │        │                             │
    │  - Wi-Fi provisioning    │◄──────►│  - setup wizard / pairing   │
    │  - pairing HTTP server   │  LAN   │  - map + flight card        │
-   │  - single-aircraft render│ pairing│  - config editing           │
+   │  - FIDS render           │ pairing│  - config editing           │
    │  - LittleFS config       │        │  - kiosk / full-screen modes│
-   └─────────────────────────┘        └────────────────────────────┘
+   └──────────────────────────┘        └────────────────────────────┘
 ```
 
 Four components, per the product brief:
 
-1. **Core2 firmware** — glanceable display, optimized for 320×240, continuous operation.
-2. **Tablet PWA** — setup/config surface, map/radar, flight board, and a standalone display mode that works without a Core2 present (as long as a gateway is reachable).
+1. **Device firmware** — glanceable display, continuous operation. One source tree builds for both supported boards; a compile-time board layer isolates the panel geometry, the Wi-Fi bring-up and the navigation input, and nothing above it is board-aware. See `docs/DISPLAY_UI.md`.
+2. **Tablet PWA** — setup/config surface, map/radar, flight board, and a standalone display mode that works without a device present (as long as a gateway is reachable).
 3. **Gateway** — the only component that talks HTTPS to the outside world for live aircraft data. Optional in the sense that a future phase could let advanced users point the Core2/PWA at a self-hosted `tar1090`/`dump1090` endpoint directly, but required for Phase 1's chosen provider (adsb.lol, HTTPS-only).
 4. **Provider adapter layer** — inside the gateway; see `docs/PROVIDER_ADAPTERS.md` and `docs/DATA_SOURCE_EVALUATION.md`.
 
@@ -65,7 +66,7 @@ provider --(HTTPS poll)--> gateway --normalize--> AircraftState[]
                                    --(WS push, same or richer payload)--> tablet PWA
 ```
 
-The gateway is the single ranking/filtering authority. Firmware still implements its own ranking/staleness logic (see `firmware/core2/src/domain/`) so that it can keep showing a sane last-known state if the gateway briefly drops a message, and so the logic is unit-testable without a network.
+The gateway is the single ranking/filtering authority. Firmware still implements its own ranking/staleness logic (see `firmware/display/src/domain/`) so that it can keep showing a sane last-known state if the gateway briefly drops a message, and so the logic is unit-testable without a network.
 
 ## Repository layout
 
@@ -73,9 +74,12 @@ See root `README.md` for the top-level tree; it follows the structure specified 
 
 - `packages/shared-models` — versioned TypeScript + Zod schemas for every cross-cutting model (`AircraftState`, `MonitoringArea`, `FilterProfile`, `DisplayProfile`, `TrackedFlight`, `DeviceConfiguration`, `ProviderStatus`, `AlertRule`, `AircraftHistoryRecord`). Consumed by both `services/gateway` and `apps/tablet-pwa` so there is exactly one definition of each model in the TypeScript world.
 - `packages/protocol` — the versioned wire format (WebSocket message envelopes + REST contract/OpenAPI) shared the same way.
-- `firmware/core2` cannot depend on the TS packages (different language), so `docs/PROTOCOL.md` is the cross-language contract of record; firmware's C++ structs and the TS types in `packages/protocol` must be kept in sync by hand, and any drift is a protocol version bump.
+- `firmware/display` cannot depend on the TS packages (different language), so `docs/PROTOCOL.md` is the cross-language contract of record; firmware's C++ structs and the TS types in `packages/protocol` must be kept in sync by hand, and any drift is a protocol version bump.
 
-## Resource-constrained design on the Core2
+## Resource-constrained design on the device
+
+These constraints are written against the tightest supported board (the Core2: no PSRAM, ~4.5MB addressable static RAM budget) and are applied on every board rather than tuned per board. The Tab5 has 32MB of PSRAM and could afford to be looser, but a bounded aircraft array and a fixed-capacity JSON document are correctness properties, not just memory savings — a payload that can't overflow behaves the same everywhere. The one place the boards genuinely diverge is the display buffer, which is a `board::kUseFullScreenCanvas` trait; see `docs/DISPLAY_UI.md`'s "Sprite and buffering strategy".
+
 
 - Fixed maximum aircraft array size (bounded by the WS payload from the gateway, itself capped).
 - `ArduinoJson` with a fixed-capacity `StaticJsonDocument`/filtered parsing — no unbounded String accumulation.

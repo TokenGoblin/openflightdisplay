@@ -8,12 +8,12 @@ coverage/
 npm-debug.log*
 
 # OTA password (local, never committed)
-firmware/core2/ota_password.txt
+firmware/display/ota_password.txt
 
 # PlatformIO
-firmware/core2/.pio/
-firmware/core2/.pioenvs/
-firmware/core2/.piolibdeps/
+firmware/display/.pio/
+firmware/display/.pioenvs/
+firmware/display/.piolibdeps/
 
 # Gateway runtime state
 services/gateway/data/*.json

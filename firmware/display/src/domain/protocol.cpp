@@ -159,12 +159,12 @@ bool parseServerMessage(const char* json, size_t len, ParsedServerMessage& out, 
   return false;
 }
 
-size_t buildHelloMessage(const char* deviceId, char* buf, size_t bufLen) {
+size_t buildHelloMessage(const char* deviceId, const char* role, char* buf, size_t bufLen) {
   StaticJsonDocument<192> doc;
   doc["schemaVersion"] = kCurrentSchemaVersion;
   doc["type"] = "hello";
   doc["deviceId"] = deviceId;
-  doc["role"] = "core2";
+  doc["role"] = role;
   const size_t written = serializeJson(doc, buf, bufLen);
   return written < bufLen ? written : 0;
 }

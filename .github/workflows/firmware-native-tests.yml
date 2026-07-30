@@ -3,11 +3,11 @@ name: firmware-native-tests
 on:
   push:
     paths:
-      - "firmware/core2/**"
+      - "firmware/display/**"
       - ".github/workflows/firmware-native-tests.yml"
   pull_request:
     paths:
-      - "firmware/core2/**"
+      - "firmware/display/**"
       - ".github/workflows/firmware-native-tests.yml"
 
 jobs:
@@ -20,9 +20,13 @@ jobs:
           python-version: "3.12"
       - run: pip install --upgrade platformio
       # Only the hardware-independent domain/ logic is exercised here --
-      # no ESP32 board required. The `core2` build target (real hardware)
-      # is intentionally not built in CI; see docs/TEST_PLAN.md's manual
-      # hardware-validation checklist for that.
+      # no ESP32 board required, and no board layer either (see
+      # firmware/display/platformio.ini's [env:native]). The `core2` and
+      # `tab5` build targets are intentionally not built in CI: between
+      # them they'd pull two full toolchains and ~1GB of packages per
+      # run, and a successful cross-compile is not the property that
+      # matters for this firmware. See docs/TEST_PLAN.md's manual
+      # hardware-validation checklist for what actually gates a release.
       - name: Run native domain-logic tests
-        working-directory: firmware/core2
+        working-directory: firmware/display
         run: pio test -e native

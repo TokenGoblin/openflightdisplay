@@ -17,7 +17,7 @@ Thanks for your interest in contributing. This is a hobbyist open-source project
 ## Project layout
 
 ```
-firmware/core2/    ESP32 firmware (PlatformIO, Arduino framework)
+firmware/display/  Device firmware, one tree for both boards (PlatformIO, Arduino framework)
 apps/tablet-pwa/   React + Vite PWA
 services/gateway/  Node/TS gateway (provider polling, normalization, WS/REST)
 packages/          Shared TS models and wire protocol used by gateway + PWA
@@ -28,7 +28,7 @@ docs/              Architecture, planning, and reference documentation
 
 Each component has its own README with setup steps:
 
-- `firmware/core2/README.md` (PlatformIO)
+- `firmware/display/README.md` (PlatformIO)
 - `apps/tablet-pwa/README.md` (Node + Vite)
 - `services/gateway/README.md` (Node + Fastify)
 

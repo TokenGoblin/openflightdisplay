@@ -1,7 +1,7 @@
 import type { AircraftFeedState } from "../hooks/useAircraftFeed";
 
 /**
- * Mirrors firmware/core2/src/main.cpp's renderCurrentState() decision
+ * Mirrors firmware/display/src/main.cpp's renderCurrentState() decision
  * order, so the tablet and Core2 agree on what "no data yet" vs. "data
  * source down" vs. "stale" mean -- see docs/PRODUCT_REQUIREMENTS.md's
  * requirement that data age/errors are always explicit, never an

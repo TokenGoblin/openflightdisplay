@@ -11,7 +11,7 @@ namespace ofd::app {
 extern AppContext* s_ctx;
 
 // Airport-FIDS-style renderer for the Core2's 320x240 panel. Every method
-// is a distinct, explicit screen state -- see docs/CORE2_DISPLAY.md for
+// is a distinct, explicit screen state -- see docs/DISPLAY_UI.md for
 // the full state diagram and docs/PRODUCT_REQUIREMENTS.md /
 // docs/ARCHITECTURE.md for why an indefinite spinner is never acceptable
 // here.
@@ -22,7 +22,7 @@ extern AppContext* s_ctx;
 // The header is a small persistent M5Canvas sprite; the body is drawn
 // directly to the panel with a single region-clear (never a full
 // fillScreen) -- see the "Sprite and buffering strategy" section of
-// docs/CORE2_DISPLAY.md for why that split was chosen over a full-screen
+// docs/DISPLAY_UI.md for why that split was chosen over a full-screen
 // sprite on this specific (PSRAM-less) hardware.
 //
 // Every method below except renderBoot/renderProvisioning/
@@ -48,7 +48,7 @@ class Display {
   // The main nearest-aircraft flight-information screen. `stale` flows
   // into the STATUS cell only -- every other field keeps showing the
   // aircraft's last known values rather than blanking, per
-  // docs/CORE2_DISPLAY.md's staleness rule.
+  // docs/DISPLAY_UI.md's staleness rule.
   void renderAircraft(const ofd::AircraftState& aircraft, uint32_t ageSeconds, bool stale);
 
   // Configured and connected, but no aircraft update has arrived yet.

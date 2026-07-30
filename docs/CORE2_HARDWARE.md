@@ -18,16 +18,18 @@ TLS (HTTPS) client connections on plain ESP32 (no PSRAM) typically need on the o
 
 ## Memory budget
 
-Real numbers from `pio run -e core2` (espressif32 platform 7.0.1, M5Unified 0.1.17, M5GFX 0.2.26, ArduinoJson 6.21.6, WebSockets 2.7.3, ESPAsyncWebServer 3.11.2, AsyncTCP 3.5.0, QRCode 0.0.1), default partition table:
+Real numbers from `pio run -e core2` (espressif32 platform 7.0.1, M5Unified 0.1.17, M5GFX 0.2.26, ArduinoJson 6.21.6, ESPAsyncWebServer 3.11.2, AsyncTCP 3.5.0, QRCode 0.0.1), default partition table:
 
 | Metric | Value | Confidence |
 |---|---|---|
-| Flash used | 1,243,813 bytes (19.0% of 6,553,600 available to the app partition) | **Measured** — real build output |
-| RAM used (static, at boot) | 55,184 bytes (1.2% of 4,521,984 bytes) | **Measured** — real build output. This is static/global data only, not a runtime heap-usage measurement |
-| Parsed aircraft array | Fixed-capacity `ArduinoJson` `StaticJsonDocument<4096>` for the WS aircraft-update message (≤10 `AircraftState` records, bounded per `docs/PROTOCOL.md`) | Bounded by design; the 4096 capacity is an engineering estimate not yet cross-checked against ArduinoJson's capacity-assistant tool |
+| Flash used | 1,339,069 bytes (20.4% of 6,553,600 available to the app partition) | **Measured** — real build output |
+| RAM used (static, at boot) | 85,268 bytes (1.9% of 4,521,984 bytes) | **Measured** — real build output. This is static/global data only, not a runtime heap-usage measurement |
+| Parsed aircraft array | Fixed-capacity `ArduinoJson` `StaticJsonDocument<16384>` for the adsb.lol response (≤10 `AircraftState` records, bounded per `docs/PROTOCOL.md`) | Bounded by design; the capacity is an engineering estimate not cross-checked against ArduinoJson's capacity-assistant tool |
 | Config JSON documents | `StaticJsonDocument<512>` for device config, `StaticJsonDocument<160>` for Wi-Fi credentials/pairing token | Bounded by design |
-| Display buffers | A small persistent header sprite (320×31, ~19.8KB) plus direct-to-panel region-clear redraws for the body — not a full 320×240 16-bit framebuffer (~150KB) — to reduce heap pressure. See `docs/CORE2_DISPLAY.md`'s "Sprite and buffering strategy" for the full reasoning | Compiles; actual runtime heap headroom during rendering (esp. concurrent with an HTTPS poll) is unmeasured |
-| OTA partition | Not used in Phase 1 (OTA is Phase 5) — default single-app partition table for now | — |
+| Display buffers | A small persistent header sprite (320×31, ~19.8KB) plus direct-to-panel region-clear redraws for the body — not a full 320×240 16-bit framebuffer (~150KB) — to reduce heap pressure. See `docs/DISPLAY_UI.md`'s "Sprite and buffering strategy" for the full reasoning | Compiles; actual runtime heap headroom during rendering (esp. concurrent with an HTTPS poll) is unmeasured |
+| OTA partition | Two 6.25MB slots (ota_0/ota_1) from the board definition's `default_16MB.csv`; the figures above are against one slot. `[env:core2-ota]` uploads via espota | **Measured** — build output |
+
+The flash/RAM figures above cover the standalone direct-adsb.lol-polling firmware with OTA and battery monitoring, and were re-measured when the firmware was reorganized to support a second board (`firmware/display/`). That reorganization itself cost +780 bytes flash and +344 bytes static RAM against the same commit built without it — the board layer is compile-time, so the only runtime additions are one unused `M5Canvas` object and the board name on the SYSTEM page.
 
 **Runtime behavior since this table was written:** the device ran continuously through an extended real testing session (provisioning, pairing, live aircraft data, deliberate gateway restarts, WebSocket reconnects) with no crashes remaining after fixing two real bugs found in the process -- see `docs/TEST_PLAN.md` for the full list, but the significant one for this table specifically was a genuine stack overflow in the WebSocket client (loopTask's default 8KB stack wasn't enough for that library's call depth once real aircraft data started flowing), fixed by moving the WS client onto its own dedicated 16KB-stack FreeRTOS task. **Still not done:** logging `ESP.getFreeHeap()` periodically over a multi-day unattended run to check for a slow leak -- the numbers above, plus a few hours of stable interactive operation, are not the same as a long-term guarantee.
 

@@ -2,6 +2,8 @@
 
 See `docs/ARCHITECTURE.md` § "Discovery and pairing flow" for the high-level rationale. This document is the step-by-step user- and implementer-facing walkthrough.
 
+**Applies to both supported boards.** The provisioning and pairing code in `firmware/display/src/app/` is entirely board-independent — the same SoftAP, the same captive portal, the same `/pair` endpoint and pairing code. Where this document says "the Core2" it means "the device"; the only board-visible differences are the device-ID prefix (`core2-` / `tab5-`, which also feeds the setup AP's name and the mDNS TXT `type` record) and the screen it's all drawn on. Note that **the Tab5's provisioning path has never been run on real hardware**, and its radio is a separate co-processor — see `docs/TAB5_HARDWARE.md`, which calls the SoftAP and network-scan paths out specifically as the least-tested part of that board.
+
 ## First-time setup (user's perspective)
 
 1. Power on the Core2. If it has no saved Wi-Fi credentials, its screen shows: "Connect to Wi-Fi network `OFD-Setup-XXXXXX` to continue," where `XXXXXX` is derived from its device ID.

@@ -16,6 +16,7 @@
 #include "app/display.h"
 #include "app/pairing_server.h"
 #include "app/wifi_provisioning.h"
+#include "board/board.h"
 #include "domain/staleness.h"
 
 using namespace ofd;
@@ -37,7 +38,7 @@ constexpr uint32_t kWifiSaveRebootDelayMs = 1500;
 constexpr uint32_t kRenderIntervalMs = 5000;
 constexpr uint32_t kOtaHandleIntervalMs = 200;
 constexpr uint32_t kWifiStatusCheckIntervalMs = 2000;
-// A stale-but-still-shown aircraft (docs/CORE2_DISPLAY.md's "preserve,
+// A stale-but-still-shown aircraft (docs/DISPLAY_UI.md's "preserve,
 // don't hide" rule) is only kept on screen up to this long past its last
 // update. Well beyond kStalePositionThresholdMs so a normal short gap
 // between polls never triggers it -- this is specifically for "the
@@ -113,7 +114,7 @@ void initOta() {
 
 void enterProvisioningMode() {
   char apName[32];
-  std::snprintf(apName, sizeof(apName), "OFD-Setup-%s", g_ctx.deviceId + 6);
+  std::snprintf(apName, sizeof(apName), "OFD-Setup-%s", deviceIdSuffix(g_ctx.deviceId));
   startProvisioningAccessPoint(g_server, apName);
   g_ctx.wifiState = WifiState::Provisioning;
   g_display.renderProvisioning(apName);
@@ -132,7 +133,10 @@ void enterConnectedMode() {
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
   MDNS.begin(g_ctx.deviceId);
   MDNS.addService("openflightdisplay", "tcp", 80);
-  MDNS.addServiceTxt("openflightdisplay", "tcp", "type", "core2");
+  // The tablet PWA reads this TXT record to tell one kind of paired
+  // display from another, so it tracks the board rather than being
+  // hardcoded to whichever board shipped first.
+  MDNS.addServiceTxt("openflightdisplay", "tcp", "type", board::kDeviceIdPrefix);
 
   registerPairingRoutes(g_server, g_ctx);
   g_server.begin();
@@ -217,7 +221,7 @@ void renderCurrentState() {
   if (stale && sinceUpdateMs > kSuperStaleMs) {
     // Stale for far longer than one missed poll -- stop showing a
     // possibly very old aircraft and fall back to "still searching"
-    // instead, per docs/CORE2_DISPLAY.md's staleness rule (preserve
+    // instead, per docs/DISPLAY_UI.md's staleness rule (preserve
     // briefly, don't preserve indefinitely).
     if (g_ctx.currentPage == DetailPage::Detail) {
       g_display.renderDetailPlaceholder();
@@ -245,6 +249,10 @@ using ofd::app::s_ctx;
 void setup() {
   auto cfg = M5.config();
   M5.begin(cfg);
+  // Before the display, and well before anything touches Wi-Fi: on a
+  // board whose radio lives on a separate co-processor, this is what
+  // makes WiFi.* work at all (src/board/tab5.cpp).
+  board::begin();
   g_display.begin();
   s_ctx = &g_ctx;
   g_display.renderBoot(g_ctx.firmwareVersion);
@@ -252,7 +260,7 @@ void setup() {
   LittleFS.begin(/*formatOnFail=*/true);
 
   if (!getDeviceId(g_ctx.deviceId, sizeof(g_ctx.deviceId))) {
-    std::strcpy(g_ctx.deviceId, "core2-unknown");
+    std::snprintf(g_ctx.deviceId, sizeof(g_ctx.deviceId), "%s-unknown", board::kDeviceIdPrefix);
   }
 
   g_ctx.hasConfig = g_ctx.configStore.loadConfig(g_ctx.config);
@@ -298,17 +306,15 @@ void loop() {
     return;
   }
 
-  // Bottom-button page navigation: BtnA/BtnB/BtnC each jump directly to
-  // a specific page (FLIGHT/DETAIL/SYSTEM) rather than prev/next, so a
-  // given physical button always means the same thing. M5.update()
-  // (called via g_display.update() at the top of loop()) is what
-  // actually refreshes M5.BtnX's pressed state from the touch panel.
+  // Page navigation. How a page gets picked is board-specific -- three
+  // physical buttons on one board, taps on the on-screen tab bar on
+  // another -- so the mechanism lives behind board::pollPageRequest()
+  // and what's left here is just "did the user ask for a different
+  // page". M5.update() (called via g_display.update() at the top of
+  // loop()) is what refreshes the button/touch state it reads.
   // Re-renders immediately on a page change instead of waiting up to
-  // kRenderIntervalMs so button presses feel responsive.
-  DetailPage requestedPage = g_ctx.currentPage;
-  if (M5.BtnA.wasPressed()) requestedPage = DetailPage::Flight;
-  if (M5.BtnB.wasPressed()) requestedPage = DetailPage::Detail;
-  if (M5.BtnC.wasPressed()) requestedPage = DetailPage::System;
+  // kRenderIntervalMs, so navigation feels responsive.
+  const DetailPage requestedPage = board::pollPageRequest(g_ctx.currentPage);
   if (requestedPage != g_ctx.currentPage) {
     g_ctx.currentPage = requestedPage;
     renderCurrentState();

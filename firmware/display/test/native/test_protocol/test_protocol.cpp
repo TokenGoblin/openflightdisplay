@@ -69,10 +69,22 @@ void test_rejects_truncated_json_without_crashing() {
 
 void test_build_hello_message() {
   char buf[192];
-  const size_t written = buildHelloMessage("core2-abc123", buf, sizeof(buf));
+  const size_t written = buildHelloMessage("core2-abc123", "core2", buf, sizeof(buf));
   TEST_ASSERT_TRUE(written > 0);
   TEST_ASSERT_TRUE(std::strstr(buf, "\"type\":\"hello\"") != nullptr);
   TEST_ASSERT_TRUE(std::strstr(buf, "core2-abc123") != nullptr);
+  TEST_ASSERT_TRUE(std::strstr(buf, "\"role\":\"core2\"") != nullptr);
+}
+
+// The role travels with the board rather than being baked in, so a
+// second board kind identifies itself as itself.
+void test_build_hello_message_carries_board_role() {
+  char buf[192];
+  const size_t written = buildHelloMessage("tab5-1c40e2", "tab5", buf, sizeof(buf));
+  TEST_ASSERT_TRUE(written > 0);
+  TEST_ASSERT_TRUE(std::strstr(buf, "tab5-1c40e2") != nullptr);
+  TEST_ASSERT_TRUE(std::strstr(buf, "\"role\":\"tab5\"") != nullptr);
+  TEST_ASSERT_TRUE(std::strstr(buf, "core2") == nullptr);
 }
 
 int main(int argc, char** argv) {
@@ -84,5 +96,6 @@ int main(int argc, char** argv) {
   RUN_TEST(test_rejects_unknown_message_type);
   RUN_TEST(test_rejects_truncated_json_without_crashing);
   RUN_TEST(test_build_hello_message);
+  RUN_TEST(test_build_hello_message_carries_board_role);
   return UNITY_END();
 }

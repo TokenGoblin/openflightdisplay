@@ -15,8 +15,8 @@ Concrete steps, in commit order:
 2. Documentation set (this file and its siblings). **(done)**
 3. `packages/shared-models` + `packages/protocol` — the normalized data model and versioned wire protocol used by everything downstream.
 4. `services/gateway` — mock/replay/adsb.lol provider adapters, normalization, nearest-distance ranking, REST (pairing/config/status), WebSocket aircraft feed, JSON-file config persistence.
-5. `firmware/core2` domain layer — hardware-independent C++ (distance/bearing, ranking, config validation, staleness, message parsing) with native PlatformIO tests.
-6. `firmware/core2` app layer — Wi-Fi provisioning, pairing HTTP server, LittleFS persistence, WebSocket client, single-aircraft render + explicit status screens.
+5. `firmware/display` domain layer — hardware-independent C++ (distance/bearing, ranking, config validation, staleness, message parsing) with native PlatformIO tests.
+6. `firmware/display` app layer — Wi-Fi provisioning, pairing HTTP server, LittleFS persistence, aircraft data source, single-aircraft render + explicit status screens, behind a compile-time board layer so one tree builds for every supported board.
 7. `apps/tablet-pwa` — setup wizard, basic map + info card, status banner, offline shell, localStorage persistence.
 8. CI workflows (build/test only, no releases yet).
 9. Root README tying it together, with real setup instructions for each component.

@@ -41,7 +41,16 @@ export const HelloMessageSchema = z.object({
   schemaVersion: z.literal(CURRENT_SCHEMA_VERSION),
   type: z.literal("hello"),
   deviceId: z.string().min(1),
-  role: z.enum(["core2", "pwa"]),
+  /**
+   * What kind of client this is. Firmware displays identify by board
+   * ("core2", "tab5") rather than a single generic "display" value: the
+   * gateway may eventually want to tailor payload size or update cadence
+   * to the panel, and a Tab5 announcing itself as a Core2 would make that
+   * impossible after the fact. Mirrors ofd::board::kDeviceIdPrefix in
+   * firmware/display/include/board/board.h -- adding a board means adding
+   * a value here.
+   */
+  role: z.enum(["core2", "tab5", "pwa"]),
 });
 export type HelloMessage = z.infer<typeof HelloMessageSchema>;
 

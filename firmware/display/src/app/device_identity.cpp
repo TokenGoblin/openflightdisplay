@@ -6,6 +6,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include "board/board.h"
+
 namespace ofd::app {
 
 bool getDeviceId(char* outBuf, size_t outBufLen) {
@@ -15,8 +17,13 @@ bool getDeviceId(char* outBuf, size_t outBufLen) {
   // keeps the id short enough to be comfortably typed by hand as a
   // manual-entry fallback (docs/PROVISIONING.md).
   const uint32_t shortId = static_cast<uint32_t>(mac & 0xFFFFFF);
-  std::snprintf(outBuf, outBufLen, "core2-%06x", shortId);
+  std::snprintf(outBuf, outBufLen, "%s-%06x", board::kDeviceIdPrefix, shortId);
   return true;
+}
+
+const char* deviceIdSuffix(const char* deviceId) {
+  const char* dash = std::strchr(deviceId, '-');
+  return dash != nullptr ? dash + 1 : deviceId;
 }
 
 void PairingCodeManager::regenerate(uint32_t nowMs) {

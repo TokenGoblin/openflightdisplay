@@ -1,0 +1,22 @@
+# 16MB flash: two OTA app slots + a LittleFS data partition.
+#
+# Byte-for-byte the same layout as the Arduino ESP32 core's own
+# default_16MB.csv, which is what [env:core2] gets automatically from the
+# m5stack-core2 board definition. It's spelled out here because the Tab5
+# builds against the generic esp32-p4-evboard definition (there is no
+# upstream PlatformIO board file for the Tab5 -- see platformio.ini), and
+# a generic board's default partition table is not something to inherit
+# by accident when OTA slot sizing is the difference between a firmware
+# update working and bricking the device.
+#
+# app0/app1 at 6.25MB each leave roughly 5x headroom over the current
+# ~1.2MB image. spiffs (the subtype LittleFS mounts by default) holds
+# wifi.json, the device config and the pairing token -- kilobytes, but it
+# must survive an OTA, which is exactly why it's a separate partition.
+# Name,     Type, SubType,  Offset,   Size,     Flags
+nvs,        data, nvs,      0x9000,   0x5000,
+otadata,    data, ota,      0xe000,   0x2000,
+app0,       app,  ota_0,    0x10000,  0x640000,
+app1,       app,  ota_1,    0x650000, 0x640000,
+spiffs,     data, spiffs,   0xc90000, 0x360000,
+coredump,   data, coredump, 0xff0000, 0x10000,

@@ -4,6 +4,10 @@ Columns: Feature | Commercial-category behavior | Core2 support | Tablet support
 
 Status legend: `done` (Phase 1 shipped), `planned` (designed, not built), `future` (acknowledged, not designed in detail yet).
 
+**On the "Core2" column and the M5Stack Tab5.** The firmware is one source tree that builds for both boards, and every feature below is implemented in board-independent code — so read the Core2 column as "device firmware support" throughout. It is *not* relabelled here for one reason: every `done` in that column is backed by a Core2 that was flashed and run, and the Tab5 has never been connected to anything. Renaming the column would silently extend those claims to hardware nobody has tested. The Tab5 gets its own column when it has its own evidence; until then see `docs/TAB5_HARDWARE.md`.
+
+The one feature where the two boards genuinely differ rather than merely sharing code is the FLIGHT screen: the Tab5's larger panel also shows a nearby-traffic board listing the other aircraft in range, which the provider already fetches and ranks (`docs/DISPLAY_UI.md`).
+
 ## Provisioning and device management
 
 | Feature | Category behavior | Core2 | Tablet | Gateway req'd | Data-source dep | Phase | Status | Tests | Notes |

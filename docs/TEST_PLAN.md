@@ -6,19 +6,23 @@ This Phase 1 implementation session started with `git` available but no working 
 
 A physical M5Stack Core2 was then connected and used for genuine end-to-end hardware testing: full first-boot provisioning, pairing with a real gateway, live setup via the tablet PWA on an actual phone, and real aircraft data from adsb.lol. This surfaced several real bugs that no amount of code review, native testing, or even a successful `pio run` build could have caught — see the git log for the full list, but the highlights: CORS was missing on both the firmware's and the gateway's HTTP APIs (every cross-origin fetch() from the PWA was silently blocked with no indication it was CORS); the QR pairing code's in-app camera scan is fundamentally non-functional over plain HTTP (`navigator.mediaDevices` requires a secure context, which this LAN-over-HTTP system doesn't have by design); the setup wizard lost all progress on a mobile browser tab reload; numeric form inputs got stuck on `0` and couldn't accept negative longitude; a naive URL string-replace produced malformed gateway URLs; a genuine ESP32 stack overflow in the WebSocket client took three rounds of real diagnosis (including a symbolicated crash backtrace) to fix, ultimately requiring the WS client to run in its own dedicated FreeRTOS task; the gateway's `.env` file was never actually being loaded (silently defaulting to the mock provider the entire session); and a burst of rapid WebSocket reconnects crashed the entire gateway process via an unhandled promise rejection from a file-write race condition.
 
-Current status: **all 107 automated tests pass** (protocol 10, shared-models 11, gateway 26, tablet-pwa 26, firmware native 34 — up from 99 as bugs found via hardware testing got regression tests), typecheck/lint/build are clean across every TypeScript workspace, and the real ESP32 firmware builds, flashes, and **runs stably on physical hardware with live aircraft data flowing continuously with no crashes**. What's still not done: Playwright end-to-end tests (no browser-automation tool was available even after installing the rest of the toolchain), and a multi-day continuous-operation/heap-leak soak test (see item 8 below).
+Current status: **all 144 automated tests pass** (protocol 10, shared-models 11, gateway 26, tablet-pwa 26, firmware native 71), typecheck/lint/build are clean across every TypeScript workspace, and the real ESP32 firmware builds, flashes, and **runs stably on physical hardware with live aircraft data flowing continuously with no crashes**. What's still not done: Playwright end-to-end tests (no browser-automation tool was available even after installing the rest of the toolchain), and a multi-day continuous-operation/heap-leak soak test (see item 8 below).
 
-## Firmware tests (`firmware/core2/test/native`)
+> An earlier revision of this file claimed 107 total / 34 firmware tests. The firmware count had gone stale as suites were added and was never corrected; the numbers above were obtained by running every suite. The firmware total is 71 as of the M5Stack Tab5 board-support work, which added one test.
 
-Domain logic lives in hardware-independent C++ (`firmware/core2/{include,src}/domain/`) specifically so it can be tested without an ESP32 or PlatformIO's Arduino simulation — just a native compiler.
+**Board coverage:** every automated test here is board-independent — the native suites exercise `domain/`, which by design contains no board or Arduino code at all. Neither the `core2` nor the `tab5` firmware build is exercised in CI (see `.github/workflows/firmware-native-tests.yml` for why), and **no automated test touches the Tab5 in any way**. What backs the Core2 is the manual hardware validation below; the Tab5 has no equivalent yet — see `docs/TAB5_HARDWARE.md`.
+
+## Firmware tests (`firmware/display/test/native`)
+
+Domain logic lives in hardware-independent C++ (`firmware/display/{include,src}/domain/`) specifically so it can be tested without an ESP32 or PlatformIO's Arduino simulation — just a native compiler.
 
 Run with:
 ```
-cd firmware/core2
+cd firmware/display
 pio test -e native
 ```
 
-All 34 test cases across the 6 suites below pass.
+All 71 test cases across the 7 suites below pass.
 
 Covered in Phase 1:
 - Haversine distance and bearing calculation, including degenerate cases (same point, antipodal-ish points).

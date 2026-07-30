@@ -49,6 +49,13 @@ bool parseServerMessage(const char* json, size_t len, ParsedServerMessage& out, 
 // Builds the client->server "hello" message sent once after connecting.
 // Returns the number of bytes written (excluding NUL), or 0 if `buf` was
 // too small.
-size_t buildHelloMessage(const char* deviceId, char* buf, size_t bufLen);
+//
+// `role` identifies the kind of client and must be one of the values in
+// docs/PROTOCOL.md's role enum ("core2", "tab5", "pwa"). It's a
+// parameter rather than a constant because this file is domain/ code
+// compiled for the hardware-free native test build, where the board
+// layer doesn't exist -- the caller, which does know its board, passes
+// ofd::board::kDeviceIdPrefix.
+size_t buildHelloMessage(const char* deviceId, const char* role, char* buf, size_t bufLen);
 
 }  // namespace ofd

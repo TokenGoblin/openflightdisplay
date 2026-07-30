@@ -14,7 +14,7 @@ namespace ofd {
 // stray "nan", a fallback that doesn't fit its field) are easy to get wrong
 // and easy to unit test, so it's kept in domain/ and covered by
 // test/native/test_display_format like the rest of the domain layer. See
-// docs/CORE2_DISPLAY.md for the full design rationale.
+// docs/DISPLAY_UI.md for the full design rationale.
 
 // ---- normalized motion / operational status ----
 
@@ -103,7 +103,7 @@ struct AircraftViewModel {
 // from the caller's own staleness check (see domain/staleness.h) -- when
 // true, `status` is forced to DisplayStatus::Stale regardless of the
 // aircraft's actual motion, but every other field still reflects the
-// last known values (never blanked), per docs/CORE2_DISPLAY.md's
+// last known values (never blanked), per docs/DISPLAY_UI.md's
 // "preserve, don't hide" staleness rule.
 void buildAircraftViewModel(const AircraftState& aircraft, uint32_t ageSeconds, bool stale,
                              AircraftViewModel& out);

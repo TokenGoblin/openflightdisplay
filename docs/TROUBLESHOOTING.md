@@ -2,6 +2,8 @@
 
 Quick diagnostic steps for common issues. For architecture and protocol details see `docs/ARCHITECTURE.md` and `docs/PROTOCOL.md`.
 
+Where this document says "the Core2" the step applies to any supported board — the firmware's networking, pairing and status endpoints are board-independent. For problems specific to the M5Stack Tab5 (it won't build, the panel is blank, Wi-Fi never associates), start with `docs/TAB5_HARDWARE.md`'s "What to check first" list instead: that board has never been run on real hardware, so its failure modes are unmapped rather than merely undocumented.
+
 ## General diagnostics
 
 1. **Check the gateway status endpoint:** `http://<gateway-ip>:8787/api/v1/status` — returns the provider health, last successful poll time, and connected device count.

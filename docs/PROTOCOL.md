@@ -2,7 +2,7 @@
 
 All messages — REST bodies and WebSocket frames alike — are JSON and carry an explicit `schemaVersion` (currently `1`). A breaking change to any payload shape bumps this number; the receiver must reject (not guess-parse) a `schemaVersion` it doesn't understand and surface a clear "unsupported protocol version" status rather than crashing or silently misbehaving.
 
-Canonical TypeScript definitions live in `packages/protocol/src`. Firmware's C++ structs in `firmware/core2/include/domain/protocol.h` are a hand-maintained mirror — any change to one must be reflected in the other and in this document. This is the cross-language contract of record.
+Canonical TypeScript definitions live in `packages/protocol/src`. Firmware's C++ structs in `firmware/display/include/domain/protocol.h` are a hand-maintained mirror — any change to one must be reflected in the other and in this document. This is the cross-language contract of record.
 
 ## Transport summary
 
@@ -81,10 +81,12 @@ Server → client messages (all carry `schemaVersion` and a `type` discriminator
 { "schemaVersion": 1, "type": "provider-status", "provider": "adsblol", "status": "ok" | "degraded" | "unavailable", "message": "adsb.lol unreachable, retrying" }
 ```
 
-Client → server (Core2 and PWA both send these):
+Client → server (firmware displays and the PWA both send these):
 ```json
-{ "schemaVersion": 1, "type": "hello", "deviceId": "core2-xxxxxx", "role": "core2" | "pwa" }
+{ "schemaVersion": 1, "type": "hello", "deviceId": "core2-xxxxxx", "role": "core2" | "tab5" | "pwa" }
 ```
+
+`role` identifies the kind of client. Firmware displays announce their board (`core2`, `tab5`) rather than a single generic `display` value, and `deviceId` carries the same board prefix. Adding a supported board means adding a value here, to `packages/protocol/src/wsMessages.ts`, and to `ofd::board::kDeviceIdPrefix` in `firmware/display/include/board/board.h`.
 
 ## Bounds and reliability rules (binding for every implementation)
 
