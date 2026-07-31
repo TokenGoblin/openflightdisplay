@@ -218,6 +218,81 @@
                     </ListView>
                 </Grid>
 
+                <!-- Data Sources -->
+                <ScrollViewer x:Name="SourcesPage" Visibility="Collapsed">
+                    <StackPanel Padding="24" Spacing="16" MaxWidth="620" HorizontalAlignment="Left">
+                        <TextBlock Text="Data Sources" FontSize="22" FontWeight="SemiBold" />
+                        <TextBlock
+                            TextWrapping="Wrap"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="Choose where aircraft data comes from. The selection is saved and restored on the next launch." />
+
+                        <ListView
+                            x:Name="SourceList"
+                            SelectionMode="Single"
+                            SelectionChanged="OnDataSourceChanged">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    <Setter Property="Padding" Value="12,10" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                        </ListView>
+
+                        <TextBlock
+                            TextWrapping="Wrap"
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                            Text="adsb.lol is a free, community-funded service. The app identifies itself, caps its request radius at 250 NM and backs off when rate limited." />
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- Settings -->
+                <ScrollViewer x:Name="SettingsPage" Visibility="Collapsed">
+                    <StackPanel Padding="24" Spacing="16" MaxWidth="620" HorizontalAlignment="Left">
+                        <TextBlock Text="Settings" FontSize="22" FontWeight="SemiBold" />
+
+                        <TextBlock Text="Units" FontWeight="SemiBold" />
+                        <ComboBox x:Name="UnitsBox" MinWidth="240" SelectionChanged="OnUnitsChanged">
+                            <ComboBoxItem Content="Aviation (NM, ft, kt)" Tag="Aviation" />
+                            <ComboBoxItem Content="Metric (km, m, km/h)" Tag="Metric" />
+                            <ComboBoxItem Content="Imperial (mi, ft, mph)" Tag="Imperial" />
+                        </ComboBox>
+
+                        <TextBlock Text="Home location" FontWeight="SemiBold" />
+                        <TextBlock
+                            FontSize="12" TextWrapping="Wrap"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="Used only to ask your chosen provider what is nearby. It is never sent anywhere else." />
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <TextBox x:Name="LatBox" Header="Latitude" Width="160" />
+                            <TextBox x:Name="LonBox" Header="Longitude" Width="160" />
+                            <TextBox x:Name="RadiusBox" Header="Radius (km)" Width="140" />
+                        </StackPanel>
+
+                        <TextBlock
+                            x:Name="SettingsError"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            TextWrapping="Wrap"
+                            Visibility="Collapsed" />
+
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <Button Content="Save and restart feed" Click="OnSaveSettings" />
+                            <TextBlock
+                                x:Name="SettingsSaved"
+                                VerticalAlignment="Center"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Visibility="Collapsed"
+                                Text="Saved." />
+                        </StackPanel>
+
+                        <TextBlock
+                            FontSize="12" TextWrapping="Wrap"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                            Text="History and notifications are not implemented yet and remain off. Settings are written atomically, so an interrupted save cannot corrupt the existing file." />
+                    </StackPanel>
+                </ScrollViewer>
+
                 <!--
                     Pages that are genuinely not built yet say so plainly, with
                     the phase they are planned for. A blank page implying work

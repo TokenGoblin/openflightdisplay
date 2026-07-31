@@ -25,25 +25,36 @@ using OpenFlightDisplay.Providers;
 /// </remarks>
 public sealed partial class AircraftFeedService : IAsyncDisposable
 {
-    private readonly IAviationDataProvider _provider;
     private readonly ILogger<AircraftFeedService> _logger;
     private readonly TimeProvider _timeProvider;
 
+    private IAviationDataProvider? _provider;
     private CancellationTokenSource? _pollingCts;
     private Task? _pollingTask;
 
     public AircraftFeedService(
-        IAviationDataProvider provider,
         ILogger<AircraftFeedService> logger,
         TimeProvider? timeProvider = null)
     {
-        ArgumentNullException.ThrowIfNull(provider);
         ArgumentNullException.ThrowIfNull(logger);
 
-        _provider = provider;
         _logger = logger;
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
+
+    /// <summary>The provider currently being polled, or <c>null</c> if stopped.</summary>
+    public IAviationDataProvider? ActiveProvider => _provider;
+
+    /// <summary>
+    /// Id of the active provider, for status messages.
+    /// </summary>
+    /// <remarks>
+    /// Only read from the publish path, which cannot run before
+    /// <see cref="StartAsync"/> has set the provider — but a placeholder is
+    /// returned rather than dereferencing null, because a status string is never
+    /// worth crashing the feed over.
+    /// </remarks>
+    private string ProviderId => _provider?.Id ?? "unknown";
 
     /// <summary>Raised on every state transition, including failures.</summary>
     public event EventHandler<FeedState>? StateChanged;
@@ -55,23 +66,30 @@ public sealed partial class AircraftFeedService : IAsyncDisposable
     /// Starts polling. Safe to call repeatedly — an existing loop is stopped
     /// first, so changing the area or provider cannot leave two loops running.
     /// </summary>
+    /// <param name="provider">
+    /// The data source to poll. Passed per-start rather than injected once, so
+    /// switching data sources is the same code path as starting up.
+    /// </param>
     public async Task StartAsync(
+        IAviationDataProvider provider,
         MonitoringArea area,
         double observerLat,
         double observerLon,
         RankingMode rankingMode = RankingMode.NearestHorizontal)
     {
+        ArgumentNullException.ThrowIfNull(provider);
         ArgumentNullException.ThrowIfNull(area);
 
         await StopAsync().ConfigureAwait(false);
 
+        _provider = provider;
         _pollingCts = new CancellationTokenSource();
         CancellationToken token = _pollingCts.Token;
 
-        Publish(new FeedState.Connecting(_provider.Id));
+        Publish(new FeedState.Connecting(provider.Id));
 
         _pollingTask = Task.Run(
-            () => PollLoopAsync(area, observerLat, observerLon, rankingMode, token),
+            () => PollLoopAsync(provider, area, observerLat, observerLon, rankingMode, token),
             token);
     }
 
@@ -105,6 +123,7 @@ public sealed partial class AircraftFeedService : IAsyncDisposable
     }
 
     private async Task PollLoopAsync(
+        IAviationDataProvider provider,
         MonitoringArea area,
         double observerLat,
         double observerLon,
@@ -118,12 +137,12 @@ public sealed partial class AircraftFeedService : IAsyncDisposable
 
         while (!token.IsCancellationRequested)
         {
-            TimeSpan delay = _provider.RecommendedPollInterval;
+            TimeSpan delay = provider.RecommendedPollInterval;
 
             try
             {
                 ProviderResult result =
-                    await _provider.FetchAircraftAsync(area, token).ConfigureAwait(false);
+                    await provider.FetchAircraftAsync(area, token).ConfigureAwait(false);
 
                 switch (result)
                 {
@@ -138,8 +157,8 @@ public sealed partial class AircraftFeedService : IAsyncDisposable
 
                     case ProviderResult.Failure failure:
                         consecutiveFailures++;
-                        delay = BackoffDelay(_provider.RecommendedPollInterval, consecutiveFailures);
-                        LogPollFailed(_logger, _provider.Id, failure.Kind.ToString(), failure.Detail);
+                        delay = BackoffDelay(provider.RecommendedPollInterval, consecutiveFailures);
+                        LogPollFailed(_logger, provider.Id, failure.Kind.ToString(), failure.Detail);
                         PublishFailure(failure);
                         break;
                 }
@@ -155,8 +174,8 @@ public sealed partial class AircraftFeedService : IAsyncDisposable
                 // A provider throwing is a bug, not an expected condition, but
                 // it must not take the whole feed down silently.
                 consecutiveFailures++;
-                delay = BackoffDelay(_provider.RecommendedPollInterval, consecutiveFailures);
-                LogPollThrew(_logger, ex, _provider.Id);
+                delay = BackoffDelay(provider.RecommendedPollInterval, consecutiveFailures);
+                LogPollThrew(_logger, ex, provider.Id);
 
                 PublishFailure(new ProviderResult.Failure(
                     FeedFailure.ProviderUnavailable, $"unexpected provider error: {ex.Message}", ex));
@@ -192,7 +211,7 @@ public sealed partial class AircraftFeedService : IAsyncDisposable
         if (ranked.Count == 0)
         {
             // An empty sky is a correct answer, not a failure.
-            Publish(new FeedState.NoMatchingAircraft(_provider.Id, success.ObservedAt));
+            Publish(new FeedState.NoMatchingAircraft(ProviderId, success.ObservedAt));
             return;
         }
 
@@ -202,8 +221,8 @@ public sealed partial class AircraftFeedService : IAsyncDisposable
         bool allStale = ranked.All(a => Staleness.IsStale(a, now));
 
         Publish(allStale
-            ? new FeedState.Stale(ranked, _provider.Id, success.ObservedAt)
-            : new FeedState.Live(ranked, _provider.Id, success.ObservedAt));
+            ? new FeedState.Stale(ranked, ProviderId, success.ObservedAt)
+            : new FeedState.Live(ranked, ProviderId, success.ObservedAt));
     }
 
     private void PublishFailure(ProviderResult.Failure failure)
@@ -220,7 +239,7 @@ public sealed partial class AircraftFeedService : IAsyncDisposable
         };
 
         Publish(new FeedState.SourceUnavailable(
-            _provider.Id,
+            ProviderId,
             failure.Kind,
             failure.Detail,
             CurrentState.KnownAircraft,

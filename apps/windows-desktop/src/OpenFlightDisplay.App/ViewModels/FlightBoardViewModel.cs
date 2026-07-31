@@ -94,9 +94,13 @@ public sealed partial class FlightBoardViewModel : ObservableObject
     /// <summary>Rows currently on the board.</summary>
     public ObservableCollection<AircraftRowViewModel> Aircraft { get; } = [];
 
-    /// <summary>Starts the feed for the given area.</summary>
-    public Task StartAsync(MonitoringArea area, double observerLat, double observerLon)
-        => _feed.StartAsync(area, observerLat, observerLon);
+    /// <summary>Starts the feed for the given provider and area.</summary>
+    public Task StartAsync(
+        Providers.IAviationDataProvider provider,
+        MonitoringArea area,
+        double observerLat,
+        double observerLon)
+        => _feed.StartAsync(provider, area, observerLat, observerLon);
 
     private void OnFeedStateChanged(object? sender, FeedState state)
     {

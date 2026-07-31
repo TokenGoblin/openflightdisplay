@@ -7,7 +7,6 @@ using Microsoft.UI.Xaml;
 using OpenFlightDisplay.App.Services;
 using OpenFlightDisplay.App.ViewModels;
 using OpenFlightDisplay.Infrastructure.Settings;
-using OpenFlightDisplay.Providers;
 using OpenFlightDisplay.Providers.AdsbLol;
 using OpenFlightDisplay.Providers.Mock;
 
@@ -55,10 +54,10 @@ public partial class App : Application
 
         services.AddSingleton<MockProvider>(_ => new MockProvider());
 
-        // Mock is the startup default so first run works with no network and no
-        // configuration. Switching the active provider is a Settings concern
-        // and lands with the data-mode picker.
-        services.AddSingleton<IAviationDataProvider>(sp => sp.GetRequiredService<MockProvider>());
+        // The active provider is chosen at runtime from persisted settings via
+        // ProviderRegistry, not bound here — switching data source must not
+        // require rebuilding the container.
+        services.AddSingleton<ProviderRegistry>();
 
         services.AddSingleton<AircraftFeedService>();
 
