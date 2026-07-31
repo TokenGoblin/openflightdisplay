@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="OpenFlightDisplay.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:OpenFlightDisplay.App.ViewModels"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="OpenFlightDisplay Desktop">
+
+    <Grid RowSpacing="0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Title bar -->
+        <Border
+            Grid.Row="0"
+            Padding="16,12"
+            Background="{ThemeResource LayerFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+            BorderThickness="0,0,0,1">
+            <TextBlock
+                Text="OPENFLIGHTDISPLAY"
+                FontFamily="{StaticResource BoardFontFamily}"
+                FontWeight="SemiBold"
+                CharacterSpacing="220"
+                FontSize="14" />
+        </Border>
+
+        <!--
+            Status banner. Always present and always worded - the project's
+            no-silent-failure rule means every state says something specific.
+            Severity is conveyed by the headline text, not by colour alone.
+        -->
+        <Border
+            Grid.Row="1"
+            Padding="16,10"
+            Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+            BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <ProgressRing
+                    IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}"
+                    Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay}"
+                    Width="16"
+                    Height="16"
+                    VerticalAlignment="Center" />
+                <StackPanel>
+                    <TextBlock
+                        Text="{x:Bind ViewModel.StatusHeadline, Mode=OneWay}"
+                        FontWeight="SemiBold"
+                        AutomationProperties.LiveSetting="Polite" />
+                    <TextBlock
+                        Text="{x:Bind ViewModel.StatusDetail, Mode=OneWay}"
+                        FontSize="12"
+                        TextWrapping="Wrap"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Flight board -->
+        <Grid Grid.Row="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Border
+                Grid.Row="0"
+                Padding="16,8"
+                Background="{ThemeResource LayerFillColorAltBrush}"
+                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                BorderThickness="0,0,0,1">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110" />
+                        <ColumnDefinition Width="90" />
+                        <ColumnDefinition Width="110" />
+                        <ColumnDefinition Width="100" />
+                        <ColumnDefinition Width="100" />
+                        <ColumnDefinition Width="110" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="70" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="CALLSIGN" Style="{StaticResource BoardHeaderTextStyle}" />
+                    <TextBlock Grid.Column="1" Text="TYPE" Style="{StaticResource BoardHeaderTextStyle}" />
+                    <TextBlock Grid.Column="2" Text="DISTANCE" Style="{StaticResource BoardHeaderTextStyle}" />
+                    <TextBlock Grid.Column="3" Text="BEARING" Style="{StaticResource BoardHeaderTextStyle}" />
+                    <TextBlock Grid.Column="4" Text="ALTITUDE" Style="{StaticResource BoardHeaderTextStyle}" />
+                    <TextBlock Grid.Column="5" Text="SPEED" Style="{StaticResource BoardHeaderTextStyle}" />
+                    <TextBlock Grid.Column="6" Text="TREND" Style="{StaticResource BoardHeaderTextStyle}" />
+                    <TextBlock Grid.Column="7" Text="AGE" Style="{StaticResource BoardHeaderTextStyle}" />
+                </Grid>
+            </Border>
+
+            <!--
+                ItemsRepeater inside a ScrollViewer virtualises rows, which is
+                what makes hundreds of aircraft viable.
+            -->
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                <ItemsRepeater ItemsSource="{x:Bind ViewModel.Aircraft, Mode=OneWay}">
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="vm:AircraftRowViewModel">
+                            <Border
+                                Padding="16,6"
+                                AutomationProperties.Name="{x:Bind AccessibleDescription}"
+                                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                BorderThickness="0,0,0,1">
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="110" />
+                                        <ColumnDefinition Width="90" />
+                                        <ColumnDefinition Width="110" />
+                                        <ColumnDefinition Width="100" />
+                                        <ColumnDefinition Width="100" />
+                                        <ColumnDefinition Width="110" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="70" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Grid.Column="0" Text="{x:Bind Callsign}" Style="{StaticResource BoardCellTextStyle}" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Column="1" Text="{x:Bind AircraftType}" Style="{StaticResource BoardCellTextStyle}" />
+                                    <TextBlock Grid.Column="2" Text="{x:Bind Distance}" Style="{StaticResource BoardCellTextStyle}" />
+                                    <TextBlock Grid.Column="3" Text="{x:Bind Bearing}" Style="{StaticResource BoardCellTextStyle}" />
+                                    <TextBlock Grid.Column="4" Text="{x:Bind Altitude}" Style="{StaticResource BoardCellTextStyle}" />
+                                    <TextBlock Grid.Column="5" Text="{x:Bind GroundSpeed}" Style="{StaticResource BoardCellTextStyle}" />
+
+                                    <!--
+                                        Glyph AND word. Trend must never be
+                                        communicated by shape or colour alone.
+                                    -->
+                                    <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind TrendGlyph}" Style="{StaticResource BoardCellTextStyle}" />
+                                        <TextBlock Text="{x:Bind TrendLabel}" Style="{StaticResource BoardCellTextStyle}" />
+                                        <TextBlock
+                                            Text="{x:Bind EmergencyLabel}"
+                                            Style="{StaticResource BoardCellTextStyle}"
+                                            FontWeight="Bold"
+                                            Visibility="{x:Bind HasEmergency}" />
+                                    </StackPanel>
+
+                                    <TextBlock Grid.Column="7" Text="{x:Bind Age}" Style="{StaticResource BoardCellTextStyle}" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+            </ScrollViewer>
+        </Grid>
+
+        <!-- Attribution: the active provider is always visible, never implicit. -->
+        <Border
+            Grid.Row="3"
+            Padding="16,8"
+            Background="{ThemeResource LayerFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+            BorderThickness="0,1,0,0">
+            <TextBlock
+                Text="{x:Bind ViewModel.ProviderAttribution, Mode=OneWay}"
+                FontSize="12"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+        </Border>
+    </Grid>
+</Window>

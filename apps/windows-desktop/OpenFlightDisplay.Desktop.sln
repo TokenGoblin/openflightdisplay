@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenFlightDisplay.Providers
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenFlightDisplay.Providers.Tests", "tests\OpenFlightDisplay.Providers.Tests\OpenFlightDisplay.Providers.Tests.csproj", "{6FA8D39A-51AF-480B-A329-A46045D0BC70}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenFlightDisplay.App", "src\OpenFlightDisplay.App\OpenFlightDisplay.App.csproj", "{331D6ED8-C047-4ED9-BC68-3E0DE70B4B4C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -73,6 +75,18 @@ Global
 		{6FA8D39A-51AF-480B-A329-A46045D0BC70}.Release|x64.Build.0 = Release|Any CPU
 		{6FA8D39A-51AF-480B-A329-A46045D0BC70}.Release|x86.ActiveCfg = Release|Any CPU
 		{6FA8D39A-51AF-480B-A329-A46045D0BC70}.Release|x86.Build.0 = Release|Any CPU
+		{331D6ED8-C047-4ED9-BC68-3E0DE70B4B4C}.Debug|Any CPU.ActiveCfg = Debug|x86
+		{331D6ED8-C047-4ED9-BC68-3E0DE70B4B4C}.Debug|Any CPU.Build.0 = Debug|x86
+		{331D6ED8-C047-4ED9-BC68-3E0DE70B4B4C}.Debug|x64.ActiveCfg = Debug|x64
+		{331D6ED8-C047-4ED9-BC68-3E0DE70B4B4C}.Debug|x64.Build.0 = Debug|x64
+		{331D6ED8-C047-4ED9-BC68-3E0DE70B4B4C}.Debug|x86.ActiveCfg = Debug|x86
+		{331D6ED8-C047-4ED9-BC68-3E0DE70B4B4C}.Debug|x86.Build.0 = Debug|x86
+		{331D6ED8-C047-4ED9-BC68-3E0DE70B4B4C}.Release|Any CPU.ActiveCfg = Release|x86
+		{331D6ED8-C047-4ED9-BC68-3E0DE70B4B4C}.Release|Any CPU.Build.0 = Release|x86
+		{331D6ED8-C047-4ED9-BC68-3E0DE70B4B4C}.Release|x64.ActiveCfg = Release|x64
+		{331D6ED8-C047-4ED9-BC68-3E0DE70B4B4C}.Release|x64.Build.0 = Release|x64
+		{331D6ED8-C047-4ED9-BC68-3E0DE70B4B4C}.Release|x86.ActiveCfg = Release|x86
+		{331D6ED8-C047-4ED9-BC68-3E0DE70B4B4C}.Release|x86.Build.0 = Release|x86
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -82,5 +96,6 @@ Global
 		{2CA89CB9-9E43-438D-A266-1E43440E0617} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{1DBBB485-B9CF-40F2-86BB-DE0702289111} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{6FA8D39A-51AF-480B-A329-A46045D0BC70} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{331D6ED8-C047-4ED9-BC68-3E0DE70B4B4C} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

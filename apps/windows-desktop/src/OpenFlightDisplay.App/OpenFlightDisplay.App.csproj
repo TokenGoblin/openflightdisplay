@@ -1,0 +1,64 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>OpenFlightDisplay.App</RootNamespace>
+
+    <!--
+      No custom ApplicationManifest. For an unpackaged WinUI 3 app the Windows
+      App SDK generates a manifest carrying the WinRT activatable-class
+      registrations the runtime needs; supplying our own replaces it wholesale
+      and the app then fails to start with "side-by-side configuration is
+      incorrect". DPI awareness is set through the SDK property below instead.
+    -->
+    <EnableDefaultApplicationManifest>true</EnableDefaultApplicationManifest>
+    <HighDpiMode>PerMonitorV2</HighDpiMode>
+    <Platforms>x86;x64;ARM64</Platforms>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <UseWinUI>true</UseWinUI>
+    <EnableMsixTooling>true</EnableMsixTooling>
+
+    <!--
+      Unpackaged by default so `dotnet run` works during development without
+      deploying an MSIX. The packaging targets override this to MSIX; see
+      docs/WINDOWS_DESKTOP.md.
+    -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>true</SelfContained>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!--
+      CA1812 fires on view models and pages that only the DI container and the
+      XAML loader construct. The analyzer cannot see either, so every one of
+      those reports is a false positive.
+    -->
+    <NoWarn>$(NoWarn);CA1812</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      CsWinRT is intentionally NOT referenced explicitly. Microsoft.WindowsAppSDK
+      brings the matching version transitively and configures it; adding a direct
+      reference activates a projection step that requires the Windows SDK to be
+      registered in the registry, which fails on a machine with only the .NET SDK
+      installed (no Visual Studio). See the toolchain notes in
+      docs/adr/0001-windows-desktop-architecture.md.
+    -->
+    <PackageReference Include="Microsoft.WindowsAppSDK" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OpenFlightDisplay.Core\OpenFlightDisplay.Core.csproj" />
+    <ProjectReference Include="..\OpenFlightDisplay.Providers\OpenFlightDisplay.Providers.csproj" />
+  </ItemGroup>
+
+</Project>
