@@ -6,13 +6,28 @@ const KM_TO_NM = 1 / 1.852;
 const FETCH_TIMEOUT_MS = 8_000;
 
 /**
- * adsb.lol adapter. Base URL and no-API-key-required status confirmed via
- * docs.adsb.lol at review time (see docs/DATA_SOURCE_EVALUATION.md), but
- * the exact point/radius path below follows the common tar1090-derived
- * "aircraft.json"-style convention shared across adsb.lol/adsb.fi/
- * airplanes.live forks -- RE-VERIFY against https://api.adsb.lol/docs
- * before relying on this in production; it was not independently
- * confirmed live in this session.
+ * adsb.lol adapter. No API key required (see
+ * docs/DATA_SOURCE_EVALUATION.md).
+ *
+ * The endpoint and response shape below are **confirmed against the live
+ * API**, not inferred from the tar1090 convention -- an earlier version
+ * of this comment carried a "RE-VERIFY before relying on this in
+ * production" warning, which has since been discharged: `/v2/point/
+ * {lat}/{lon}/{radiusNm}` was exercised repeatedly against
+ * api.adsb.lol and returns `{ ac: [...], msg, now, total, ctime, ptime }`
+ * with the per-aircraft fields this file reads. The OpenAPI spec at
+ * https://api.adsb.lol/api/openapi.json is the authoritative list.
+ *
+ * Three response quirks are load-bearing and covered by
+ * tests/adsblolProvider.test.ts: callsigns are space-padded to eight
+ * characters, `alt_baro` is the *string* "ground" for surface traffic,
+ * and some records omit `flight` entirely.
+ *
+ * The 250 NM clamp below is intentionally far looser than the firmware's
+ * 80 NM (firmware/display/src/app/adsb_provider.cpp). The firmware's
+ * limit exists because a larger response overruns a fixed 16KB parse
+ * buffer; this runs on a machine with real memory and only needs to
+ * avoid asking a free, community-funded service for a continent.
  */
 export class AdsbLolProvider implements AviationDataProvider {
   readonly id = "adsblol";

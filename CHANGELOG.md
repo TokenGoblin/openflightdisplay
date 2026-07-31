@@ -36,6 +36,14 @@ repeatedly turned out to be where the bugs live.
   actually walking out — taxi, deplaning, immigration, bags — because an
   alert keyed to landing alone sends people to the airport 20–45 minutes
   early, which is the failure the feature exists to prevent.
+- **Tests for the adsb.lol provider adapter** (13 cases), from a fixture
+  whose shape was captured from the live API. Covers the three response
+  quirks that break naive parsers — space-padded callsigns, `alt_baro` as
+  the string `"ground"`, records with no `flight` field — plus request
+  construction and every failure path. They passed on first run, so they
+  lock in behaviour that was already correct rather than having found a
+  defect; the firmware's callsign-padding bug is the argument for having
+  them.
 - `CHANGELOG.md` (this file).
 
 ### Changed
@@ -112,8 +120,12 @@ repeatedly turned out to be where the bugs live.
   to record what it used to say and why it changed.
 - Test counts had gone stale (a claimed 107 total / 34 firmware against
   an actual 143 / 70). Every count is now obtained by running the suites.
-- New: `docs/TAB5_HARDWARE.md`. `docs/CORE2_DISPLAY.md` became
-  `docs/DISPLAY_UI.md` and covers both boards.
+- New: `docs/TAB5_HARDWARE.md`. The Core2-specific display design doc was
+  renamed to `docs/DISPLAY_UI.md` and now covers both boards.
+- `docs/TEST_PLAN.md` claimed the adsb.lol adapter was covered by a
+  fixture-based test. Neither the fixture nor the test existed — the one
+  provider adapter that runs in production was the one with no coverage
+  at all. Now genuinely covered (see Added).
 
 ### Unverified
 

@@ -6,7 +6,7 @@ This Phase 1 implementation session started with `git` available but no working 
 
 A physical M5Stack Core2 was then connected and used for genuine end-to-end hardware testing: full first-boot provisioning, pairing with a real gateway, live setup via the tablet PWA on an actual phone, and real aircraft data from adsb.lol. This surfaced several real bugs that no amount of code review, native testing, or even a successful `pio run` build could have caught — see the git log for the full list, but the highlights: CORS was missing on both the firmware's and the gateway's HTTP APIs (every cross-origin fetch() from the PWA was silently blocked with no indication it was CORS); the QR pairing code's in-app camera scan is fundamentally non-functional over plain HTTP (`navigator.mediaDevices` requires a secure context, which this LAN-over-HTTP system doesn't have by design); the setup wizard lost all progress on a mobile browser tab reload; numeric form inputs got stuck on `0` and couldn't accept negative longitude; a naive URL string-replace produced malformed gateway URLs; a genuine ESP32 stack overflow in the WebSocket client took three rounds of real diagnosis (including a symbolicated crash backtrace) to fix, ultimately requiring the WS client to run in its own dedicated FreeRTOS task; the gateway's `.env` file was never actually being loaded (silently defaulting to the mock provider the entire session); and a burst of rapid WebSocket reconnects crashed the entire gateway process via an unhandled promise rejection from a file-write race condition.
 
-Current status: **all 204 automated tests pass** (protocol 10, shared-models 20, gateway 26, tablet-pwa 44, firmware native 104), typecheck/lint/build are clean across every TypeScript workspace, and the real ESP32 firmware builds, flashes, and **runs stably on physical hardware with live aircraft data flowing continuously with no crashes**. What's still not done: Playwright end-to-end tests (no browser-automation tool was available even after installing the rest of the toolchain), and a multi-day continuous-operation/heap-leak soak test (see item 8 below).
+Current status: **all 217 automated tests pass** (protocol 10, shared-models 20, gateway 39, tablet-pwa 44, firmware native 104), typecheck/lint/build are clean across every TypeScript workspace, and the real ESP32 firmware builds, flashes, and **runs stably on physical hardware with live aircraft data flowing continuously with no crashes**. What's still not done: Playwright end-to-end tests (no browser-automation tool was available even after installing the rest of the toolchain), and a multi-day continuous-operation/heap-leak soak test (see item 8 below).
 
 > An earlier revision of this file claimed 107 total / 34 firmware tests. The firmware count had gone stale as suites were added and was never corrected; every number here is now obtained by running the suites rather than by editing the previous figure. Recent movement: 144 → 199 from the flight-tracking work (34 native, 12 PWA, 9 shared-model), then 199 → 191 when an audit deleted `domain/protocol.cpp` and its 8 tests — they exercised a WebSocket parser nothing had called since the firmware became a standalone poller. A test suite for dead code is a liability, not coverage.
 
@@ -55,12 +55,14 @@ npm install
 npm test
 ```
 
-All 26 tests across 5 suites pass.
+All 39 tests across 6 suites pass.
 
 Covered in Phase 1:
 - Mock provider normalization → `AircraftState[]` shape and required-field validation.
 - Replay provider: deterministic playback of a fixture file.
-- adsb.lol adapter: normalization from a recorded sample response fixture (does not hit the network in tests) — separately confirmed against the live API by hand (see `docs/DATA_SOURCE_EVALUATION.md`).
+- adsb.lol adapter: request construction (km→NM conversion, radius clamp), normalization, and failure handling, from a fixture whose *shape* was captured from the live API (values are synthetic per the fixture policy below). `fetch` is stubbed, so no network access in CI.
+  - Covers the three response quirks that break naive parsers, all observed in a real response: space-padded callsigns (`"TST1234 "`), `alt_baro` as the **string** `"ground"` rather than a number, and records with no `flight` field. The firmware shipped with the padding bug; a realistically-shaped fixture is the cheapest defence against repeating it.
+  - **This suite did not exist until recently.** An earlier revision of this document claimed the adapter was covered "from a recorded sample response fixture" — there was no such fixture and no such test, and the only provider adapter that runs in production was the one with no coverage at all. The tests passed on first run, so this documents and locks in behaviour that was already correct rather than having found a defect.
 - Nearest-distance ranking given a `MonitoringArea`.
 - REST endpoint validation (pairing, config CRUD) — rejects malformed bodies, enforces pairing-token requirement on writes.
 - WebSocket contract test: client receives a versioned envelope, a heartbeat, and a provider-status message on simulated provider failure.
