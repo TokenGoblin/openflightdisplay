@@ -120,6 +120,10 @@ There's no dedicated `docs/TROUBLESHOOTING.md` yet (planned for a later phase). 
 
 Each component has its own README with detailed setup: `firmware/display/README.md`, `apps/tablet-pwa/README.md`, `services/gateway/README.md`, `packages/*/README.md`.
 
+## Changelog
+
+`CHANGELOG.md` records what changed and — deliberately — what remains unverified. On this project the gap between "it compiles" and "it works" is where the bugs have consistently lived, so each entry says which side of that line it sits on.
+
 ## Contributing
 
 See `CONTRIBUTING.md` — in particular, the licensing/attribution rules around the reference projects this design was informed by.

@@ -22,6 +22,7 @@ apps/tablet-pwa/   React + Vite PWA
 services/gateway/  Node/TS gateway (provider polling, normalization, WS/REST)
 packages/          Shared TS models and wire protocol used by gateway + PWA
 docs/              Architecture, planning, and reference documentation
+CHANGELOG.md       What changed, and what is still unverified
 ```
 
 ## Development setup

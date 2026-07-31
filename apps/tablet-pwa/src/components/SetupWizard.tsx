@@ -3,7 +3,7 @@ import type { DeviceConfiguration } from "@openflightdisplay/shared-models";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { useQrScanner } from "../hooks/useQrScanner";
 import { pairWithCore2, putCore2Config, claimDeviceWithGateway, putGatewayConfig, ApiError } from "../lib/api";
-import { normalizeHttpUrl, toWebSocketBaseUrl, isValidAddress } from "../lib/url";
+import { normalizeHttpUrl, isValidAddress } from "../lib/url";
 import { StatusPill } from "./StatusPill";
 import {
   saveStoredConnection,
@@ -119,7 +119,11 @@ export function SetupWizard({ onComplete }: { onComplete: (connection: StoredCon
               const config: DeviceConfiguration = {
                 deviceId: draft.deviceId,
                 deviceName: draft.deviceName,
-                gatewayUrl: `${toWebSocketBaseUrl(draft.gatewayBaseUrl)}/ws/v1/aircraft`,
+                // gatewayUrl deliberately not sent: no reader exists.
+                // The firmware has no such config field (it polls the
+                // provider directly), and the gateway never reads it
+                // either. It was computed and transmitted on every setup
+                // for nothing. See DeviceConfigurationSchema.
                 monitoringArea: {
                   kind: "circle",
                   centerLat: draft.latitude,

@@ -54,7 +54,6 @@ The pairing code is generated fresh on every boot where the device is unpaired, 
 {
   "schemaVersion": 1,
   "deviceName": "Living Room",
-  "gatewayUrl": "ws://192.168.1.50:8787/ws/v1/aircraft",
   "monitoringArea": { "kind": "circle", "centerLat": 47.6, "centerLon": -122.3, "radiusKm": 15 },
   "trackedFlight": { "flight": "UA1234", "callsign": "UAL1234", "destinationIcao": "KSEA", "travelMinutes": 35, "postLandingMinutes": 30 },
   "displayProfile": { "mode": "single-aircraft", "brightness": 200 }

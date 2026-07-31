@@ -29,7 +29,8 @@ export function toWebSocketBaseUrl(httpUrl: string): string {
  */
 export function isValidAddress(raw: string): boolean {
   try {
-    // eslint-disable-next-line no-new -- only used for its throw-on-invalid behavior
+    // Constructed only for its throw-on-invalid behaviour; the instance
+    // is intentionally discarded.
     new URL(normalizeHttpUrl(raw));
     return true;
   } catch {
