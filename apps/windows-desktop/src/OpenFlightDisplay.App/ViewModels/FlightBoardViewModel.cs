@@ -46,6 +46,26 @@ public sealed partial class FlightBoardViewModel : ObservableObject
     [ObservableProperty]
     public partial UnitSystem Units { get; set; }
 
+    /// <summary>
+    /// Aircraft shown in the detail pane, or <c>null</c> when none is selected.
+    /// </summary>
+    /// <remarks>
+    /// Paired with <see cref="HasSelection"/> rather than a null-to-visibility
+    /// converter: a Window is not a FrameworkElement in WinUI 3, so a
+    /// StaticResource converter referenced from a Window's binding fails to
+    /// generate. x:Bind converts a bool to Visibility natively.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelection))]
+    public partial AircraftRowViewModel? SelectedAircraft { get; set; }
+
+    /// <summary>True when the detail pane should be shown.</summary>
+    public bool HasSelection => SelectedAircraft is not null;
+
+    /// <summary>Radius of the monitoring area, for the radar's outer ring.</summary>
+    [ObservableProperty]
+    public partial double RangeKm { get; set; }
+
     public FlightBoardViewModel(
         AircraftFeedService feed,
         DispatcherQueue dispatcher,
@@ -65,6 +85,7 @@ public sealed partial class FlightBoardViewModel : ObservableObject
         StatusSeverity = StatusSeverity.Info;
         ProviderAttribution = string.Empty;
         Units = UnitSystem.Aviation;
+        RangeKm = 80.0;
 
         _feed.StateChanged += OnFeedStateChanged;
         Apply(_feed.CurrentState);
@@ -169,11 +190,20 @@ public sealed partial class FlightBoardViewModel : ObservableObject
         // each poll, which is fine at a dozen and will not be at a thousand.
         // Phase 2 replaces it with a keyed diff against IcaoHex. Measured, not
         // guessed, via the diagnostics page.
+        //
+        // The selection is keyed on IcaoHex and restored afterwards, because a
+        // detail pane that closed itself every poll would be unusable.
+        string? selectedHex = SelectedAircraft?.Aircraft.IcaoHex;
+
         Aircraft.Clear();
         foreach (var a in aircraft)
         {
             Aircraft.Add(new AircraftRowViewModel(a, Units, now));
         }
+
+        SelectedAircraft = selectedHex is null
+            ? null
+            : Aircraft.FirstOrDefault(r => r.Aircraft.IcaoHex == selectedHex);
     }
 
     private static string HeadlineFor(FeedFailure failure) => failure switch

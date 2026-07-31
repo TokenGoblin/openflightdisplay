@@ -149,6 +149,83 @@ public sealed class AircraftRowViewModel
         }
     }
 
+    // ---- detail pane ----
+    //
+    // Labelled variants of the board columns. The label is part of the string
+    // rather than a separate XAML element so the pane reads correctly to a
+    // screen reader in one pass, and so a missing value still says which field
+    // is missing rather than showing a bare dash.
+
+    public string DetailRegistration => $"Registration   {Registration}";
+
+    public string DetailType => $"Type           {AircraftType}";
+
+    public string DetailDistance => $"Distance       {Distance}";
+
+    public string DetailBearing => $"Bearing        {Bearing}";
+
+    public string DetailAltitude => $"Altitude       {Altitude}";
+
+    public string DetailSpeed => $"Ground speed   {GroundSpeed}";
+
+    public string DetailVerticalRate => $"Vertical rate  {VerticalRate}";
+
+    public string DetailSquawk => $"Squawk         {Squawk}";
+
+    public string DetailPosition => string.Create(
+        CultureInfo.CurrentCulture,
+        $"Position       {_aircraft.Latitude:F4}, {_aircraft.Longitude:F4}");
+
+    public string DetailObserved => $"Observed       {AgeSeconds}s ago";
+
+    /// <summary>Attribution line. The source is never implicit.</summary>
+    public string DetailSource => $"Source: {_aircraft.Provider}";
+
+    /// <summary>
+    /// Plain-language summary of what this record is missing.
+    /// </summary>
+    /// <remarks>
+    /// Shown rather than hidden. Missing enrichment never suppresses an
+    /// aircraft, so the gaps are stated instead — otherwise a blank field is
+    /// indistinguishable from a value that happens to be zero.
+    /// </remarks>
+    public string DataQualityNote
+    {
+        get
+        {
+            var notes = new List<string>();
+
+            if (_aircraft.DataQualityFlags.HasFlag(DataQualityFlags.NoCallsign))
+            {
+                notes.Add("no callsign reported");
+            }
+
+            if (_aircraft.DataQualityFlags.HasFlag(DataQualityFlags.NoAltitude))
+            {
+                notes.Add("no altitude reported");
+            }
+
+            if (_aircraft.DataQualityFlags.HasFlag(DataQualityFlags.StalePosition))
+            {
+                notes.Add("position is stale");
+            }
+
+            if (_aircraft.DataQualityFlags.HasFlag(DataQualityFlags.EstimatedPosition))
+            {
+                notes.Add("position is estimated");
+            }
+
+            // Stated explicitly rather than left blank: ADS-B carries no route,
+            // and silence here could be read as "no route exists" rather than
+            // "this provider does not supply one".
+            notes.Add(_aircraft.OriginAirport is null && _aircraft.DestinationAirport is null
+                ? "route not available from this data source"
+                : "route supplied by the data source");
+
+            return "Data quality: " + string.Join("; ", notes) + ".";
+        }
+    }
+
     private static string Format(double? value, string numericFormat, string unitLabel)
         => value is { } v
             ? string.Create(CultureInfo.CurrentCulture, $"{v.ToString(numericFormat, CultureInfo.CurrentCulture)} {unitLabel}")

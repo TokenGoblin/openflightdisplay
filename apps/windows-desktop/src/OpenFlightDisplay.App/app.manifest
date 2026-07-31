@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+
+  <!--
+    DPI awareness ONLY.
+
+    Deliberately minimal. An earlier version of this file also declared
+    <assemblyIdentity> and a <compatibility>/<supportedOS> block, which replaced
+    the identity the Windows App SDK generates for an unpackaged WinUI app and
+    made it fail at startup with "side-by-side configuration is incorrect".
+
+    Declaring PerMonitorV2 is not optional: without it the process runs
+    DPI-unaware, WinUI lays its content out in DIPs while the window is sized in
+    physical pixels, and on a scaled display the whole UI is drawn ~1.5x too
+    large - overflowing the window, pushing the footer off-screen and putting
+    the radar's centre well off centre.
+  -->
+
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+    </windowsSettings>
+  </application>
+
+</assembly>

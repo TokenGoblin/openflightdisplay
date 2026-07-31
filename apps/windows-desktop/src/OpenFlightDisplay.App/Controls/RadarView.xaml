@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="OpenFlightDisplay.App.Controls.RadarView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <!--
+        Surface is the single source of truth for the plot's geometry. All
+        drawing reads its ActualWidth/ActualHeight at draw time, and SizeChanged
+        is handled here rather than on the UserControl so the size that triggers
+        a redraw is the same size the redraw measures.
+    -->
+    <Grid
+        x:Name="Surface"
+        Background="{ThemeResource LayerFillColorAltBrush}"
+        SizeChanged="OnSizeChanged">
+
+        <!--
+            Two canvases: the scale (rings, cardinals, observer) and the
+            aircraft. Both are pinned to the top-left so Canvas.Left/Top mean
+            exactly what the drawing code assumes - a Canvas has no desired size
+            of its own, and left to stretch its origin depends on how the parent
+            arranges a zero-size child.
+        -->
+        <Canvas
+            x:Name="ScaleCanvas"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            IsHitTestVisible="False" />
+
+        <Canvas
+            x:Name="AircraftCanvas"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top" />
+
+        <!--
+            The radar is a visual convenience, not the source of truth. Screen
+            readers get the flight board, which carries the same aircraft with
+            full per-row descriptions.
+        -->
+        <TextBlock
+            x:Name="EmptyLabel"
+            Text="No aircraft to plot"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            Visibility="Collapsed" />
+    </Grid>
+</UserControl>

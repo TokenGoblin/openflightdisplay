@@ -6,6 +6,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using OpenFlightDisplay.App.Services;
 using OpenFlightDisplay.App.ViewModels;
+using OpenFlightDisplay.Infrastructure.Settings;
 using OpenFlightDisplay.Providers;
 using OpenFlightDisplay.Providers.AdsbLol;
 using OpenFlightDisplay.Providers.Mock;
@@ -60,6 +61,10 @@ public partial class App : Application
         services.AddSingleton<IAviationDataProvider>(sp => sp.GetRequiredService<MockProvider>());
 
         services.AddSingleton<AircraftFeedService>();
+
+        services.AddSingleton(sp => new SettingsStore(
+            SettingsStore.DefaultFilePath,
+            sp.GetRequiredService<ILogger<SettingsStore>>()));
 
         // The dispatcher is captured on the UI thread at construction, which is
         // where ConfigureServices runs.

@@ -7,15 +7,18 @@
     <RootNamespace>OpenFlightDisplay.App</RootNamespace>
 
     <!--
-      No custom ApplicationManifest. For an unpackaged WinUI 3 app the Windows
-      App SDK generates a manifest carrying the WinRT activatable-class
-      registrations the runtime needs; supplying our own replaces it wholesale
-      and the app then fails to start with "side-by-side configuration is
-      incorrect". DPI awareness is set through the SDK property below instead.
+      A DPI-awareness-only manifest. It must stay minimal: declaring an
+      assemblyIdentity or supportedOS here replaces what the Windows App SDK
+      generates for an unpackaged WinUI app and breaks startup. See the comments
+      in app.manifest.
     -->
-    <EnableDefaultApplicationManifest>true</EnableDefaultApplicationManifest>
-    <HighDpiMode>PerMonitorV2</HighDpiMode>
-    <Platforms>x86;x64;ARM64</Platforms>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!--
+      x64 and ARM64 only. Leaving x86 in Platforms while shipping only
+      win-x64/win-arm64 runtime identifiers makes a solution-level build fail
+      with NETSDK1032, because the default platform is resolved before the RID.
+    -->
+    <Platforms>x64;ARM64</Platforms>
     <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
     <UseWinUI>true</UseWinUI>
     <EnableMsixTooling>true</EnableMsixTooling>
@@ -58,6 +61,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\OpenFlightDisplay.Core\OpenFlightDisplay.Core.csproj" />
+    <ProjectReference Include="..\OpenFlightDisplay.Infrastructure\OpenFlightDisplay.Infrastructure.csproj" />
     <ProjectReference Include="..\OpenFlightDisplay.Providers\OpenFlightDisplay.Providers.csproj" />
   </ItemGroup>
 
