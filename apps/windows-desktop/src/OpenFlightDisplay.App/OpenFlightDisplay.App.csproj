@@ -29,6 +29,15 @@
       docs/WINDOWS_DESKTOP.md.
     -->
     <WindowsPackageType>None</WindowsPackageType>
+
+    <!--
+      Self-contained so an unpackaged dev build runs without the Windows App
+      Runtime being installed separately.
+
+      NOTE: framework-dependent deployment was tried as a fix for the DPI
+      scaling defect described in docs/WINDOWS_DESKTOP.md and made no
+      difference, so this is chosen on distribution grounds alone.
+    -->
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <SelfContained>true</SelfContained>
   </PropertyGroup>
