@@ -9,8 +9,9 @@ Canonical TypeScript definitions live in `packages/protocol/src`. Firmware's C++
 | Link | Transport | Auth | TLS |
 |---|---|---|---|
 | PWA ↔ gateway | REST (config/pairing) + WebSocket (`/ws/v1/aircraft`) | Pairing token (per device) for config writes | Plaintext, LAN-only (see `docs/SECURITY_AND_PRIVACY.md`) |
-| Core2 ↔ gateway | WebSocket client (`/ws/v1/aircraft`) | Pairing token in query string or first-frame auth message | Plaintext, LAN-only |
-| PWA ↔ Core2 | REST (pairing claim, config CRUD, status) served by Core2 itself | Pairing token (except the initial `/pair` claim, which consumes a short-lived pairing code) | Plaintext, LAN-only |
+| PWA ↔ device | REST (pairing claim, config CRUD, status) served by the device itself | Pairing token (except the initial `/pair` claim, which consumes a short-lived pairing code) | Plaintext, LAN-only |
+| device → provider | HTTPS GET (adsb.lol) | None required by the provider | **TLS**, outbound to the internet |
+| ~~device ↔ gateway~~ | ~~WebSocket client~~ | — | **Not implemented.** The firmware polls the provider directly; the gateway-client code was removed. The message schemas below are retained as the contract for the PWA's feed and for any future gateway-mediated mode |
 
 ## Core2's own local HTTP API (served by the Core2)
 

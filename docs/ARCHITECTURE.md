@@ -36,11 +36,17 @@ Four components, per the product brief:
 3. **Gateway** — the only component that talks HTTPS to the outside world for live aircraft data. Optional in the sense that a future phase could let advanced users point the Core2/PWA at a self-hosted `tar1090`/`dump1090` endpoint directly, but required for Phase 1's chosen provider (adsb.lol, HTTPS-only).
 4. **Provider adapter layer** — inside the gateway; see `docs/PROVIDER_ADAPTERS.md` and `docs/DATA_SOURCE_EVALUATION.md`.
 
-## Why the gateway is in the loop for Phase 1
+## Where provider polling actually happens
 
-The ESP32 could, in principle, speak TLS. But every viable live provider is HTTPS-only, and this project has no physical Core2 hardware to verify TLS heap headroom on (see `docs/CORE2_HARDWARE.md` — the memory budget there is explicitly marked estimated/unverified). Rather than ship firmware that might brownout or fragment heap on a device meant to run 24/7, provider polling, retry/backoff, and normalization all live in the gateway. The Core2 only ever speaks plain WebSocket/HTTP, and only on the LAN.
+> **This section previously said the opposite,** and was wrong for long enough to be worth recording rather than quietly overwriting. It claimed provider polling "all live[s] in the gateway" and that "the Core2 only ever speaks plain WebSocket/HTTP, and only on the LAN" — on the reasoning that no physical hardware existed to verify TLS heap headroom. Both premises expired: a Core2 was acquired and tested end to end, and the firmware was changed to poll adsb.lol over HTTPS directly. The document wasn't updated, so it spent several commits describing an architecture the code had already left.
 
-This also means: swapping or adding a provider touches one file in `services/gateway/src/providers/`, never firmware.
+**The device polls the provider directly, over HTTPS.** `firmware/display/src/app/adsb_provider.cpp` calls `https://api.adsb.lol/...` from a dedicated FreeRTOS task — three endpoints: the geographic query for nearest aircraft, a callsign lookup for a tracked flight, and an airport lookup to resolve a destination.
+
+The original concern — mbedTLS heap on a PSRAM-less ESP32 — turned out to be manageable, but only because the buffers are bounded deliberately. See `docs/CORE2_HARDWARE.md`'s memory budget: a fixed parse buffer, a field filter that discards ~70% of each response before it reaches memory, streaming parse so the payload is never materialised as a String, and a clamped query radius. Those are not incidental; they are what makes TLS on this board safe, and an audit found the display would silently and permanently blank when the last of them was missing.
+
+**The gateway is therefore optional for a single device.** It still exists and still earns its place for: multiple displays sharing one upstream poll (rather than each device hitting the provider independently), the tablet PWA's own feed, provider adapters that need credentials you'd rather not put on a device, and future history/alerting that needs somewhere to persist. A device with no gateway on the network works fine; a fleet of them without one is rude to a free, community-funded data source.
+
+Swapping providers is consequently *not* a one-file change any more: it touches `services/gateway/src/providers/` **and** the firmware's own poller. That's a real cost of the direct-polling design and should be weighed if a second provider is ever added.
 
 ## Discovery and pairing flow
 
@@ -54,19 +60,20 @@ Browsers cannot browse mDNS services (there is no web-platform API for it), so t
 3. **Tablet PWA "Add Display"** step: accepts manual IP + code entry as the default and primary path, or scanning the QR code as a secondary option. **Confirmed via real hardware testing that QR scanning does not actually work in this system's normal deployment**: a phone's default camera app just opens the encoded URL as a plain link (the Core2 now serves an explanatory page there instead of a dead 404, but it still doesn't complete pairing by itself), and the PWA's own in-app camera scanner (`getUserMedia`) cannot run at all, because `navigator.mediaDevices` requires a secure (HTTPS) context and this system is plain HTTP on the LAN by design (see "Why the gateway is in the loop" above). Manual entry is not a fallback here — it is the only pairing path that actually works today. A future phase could revisit this (e.g., serving the pairing page over HTTPS with a self-signed/local CA), but that's out of scope for Phase 1.
 4. PWA calls Core2's `/pair` endpoint with the code, receives a pairing token, and stores it (plus the Core2's LAN address) as the active device. The Wi-Fi password itself never touches the tablet — it was entered once, directly into the Core2's captive portal, over its temporary AP.
 5. PWA writes location, monitoring radius, and the gateway URL to the Core2 via its local REST API (authenticated with the pairing token from step 4).
-6. Core2 persists this configuration to LittleFS and opens a **WebSocket client** connection out to the configured gateway's `/ws/v1/aircraft` endpoint.
+6. The device persists this configuration to LittleFS and starts its own **HTTPS poller** against adsb.lol (see "Where provider polling actually happens" above). It does *not* open a WebSocket to the gateway; that step existed in an earlier design and the gateway-client code has since been removed from the firmware entirely.
 7. The PWA, independently, also opens a WebSocket connection to the same gateway endpoint for its own map/card view — guaranteeing "Core2 and tablet show the same aircraft," since both read from one source of truth.
 
 ## Data flow (steady state)
 
 ```
-provider --(HTTPS poll)--> gateway --normalize--> AircraftState[]
-                                   --rank/filter (per device's MonitoringArea+FilterProfile)-->
-                                   --(WS push, bounded top-N, versioned envelope)--> Core2
-                                   --(WS push, same or richer payload)--> tablet PWA
+                    ┌─(HTTPS poll, filtered+streamed)─► firmware/display
+provider (adsb.lol) ┤                                    normalize → rank → render
+                    └─(HTTPS poll)─► gateway ─(WS push)─► tablet PWA
 ```
 
-The gateway is the single ranking/filtering authority. Firmware still implements its own ranking/staleness logic (see `firmware/display/src/domain/`) so that it can keep showing a sane last-known state if the gateway briefly drops a message, and so the logic is unit-testable without a network.
+**Two independent paths to the same provider**, which is the honest picture rather than one pipeline. The device normalizes and ranks its own responses (`firmware/display/src/domain/` — `parseAdsbAircraft`, `rankNearest`, staleness); the gateway does the same for the PWA in TypeScript (`services/gateway/src/`).
+
+That duplication is deliberate but not free. `domain/geo.h` says outright that it "mirrors `services/gateway/src/lib/geo.ts` exactly" so the two agree, and `docs/PROTOCOL.md` is the cross-language contract of record. The benefit is that a device keeps working with no gateway on the network at all, and the ranking logic stays unit-testable without one. The cost is two implementations to keep in step — see "Where provider polling actually happens" for when that cost is worth paying.
 
 ## Repository layout
 

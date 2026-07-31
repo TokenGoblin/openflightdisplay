@@ -38,14 +38,16 @@ Plus:
 
 ```
 provider (adsb.lol / mock / replay)
-        │ HTTPS polling (gateway only — never the ESP32; see docs/ARCHITECTURE.md)
-        ▼
-services/gateway  ──WS/HTTP (LAN, plaintext)──►  firmware/display (Core2 / Tab5)
         │
-        └──WS/HTTP (LAN or same-origin)──►  apps/tablet-pwa (setup + radar + card)
+        ├── HTTPS poll ──────────────────────►  firmware/display (Core2 / Tab5)
+        │                                        normalizes + ranks on-device
+        │
+        └── HTTPS poll ──►  services/gateway  ──WS/HTTP (LAN)──►  apps/tablet-pwa
 ```
 
-Full diagram and rationale (including why provider polling never happens on the ESP32): `docs/ARCHITECTURE.md`.
+**The device polls the provider itself and works with no gateway running.** The gateway still earns its place for the tablet PWA's feed, for several displays sharing one upstream poll instead of each hitting the provider independently, and for future history/alerting — but it is not in the path of a single display showing aircraft.
+
+Full diagram and rationale, including why the earlier gateway-only design changed and what bounded buffers make TLS on a PSRAM-less ESP32 safe: `docs/ARCHITECTURE.md`.
 
 ## Quick start
 
