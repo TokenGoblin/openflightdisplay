@@ -20,4 +20,14 @@ const char* resolveAirlineName(const char* callsign);
 // start with 3 alphabetic characters.
 void extractAirlinePrefix(const char* callsign, char* out, size_t outLen);
 
+// Maps a 2-character IATA airline code to its 3-letter ICAO designator
+// ("UA" → "UAL", case-insensitive). Returns nullptr if the code isn't in
+// the table.
+//
+// Needed because the two codes address different audiences: ADS-B
+// broadcasts ICAO, while boarding passes and arrivals boards print IATA.
+// Flight tracking accepts what the user actually has to hand and
+// translates — see domain/flight_tracking.h's normalizeFlightIdentifier().
+const char* icaoForIataAirline(const char* iata);
+
 }  // namespace ofd

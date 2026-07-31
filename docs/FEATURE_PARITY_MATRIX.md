@@ -78,7 +78,10 @@ The one feature where the two boards genuinely differ rather than merely sharing
 
 | Feature | Category behavior | Core2 | Tablet | Gateway req'd | Data-source dep | Phase | Status | Tests | Notes |
 |---|---|---|---|---|---|---|---|---|---|
-| Track by flight #/callsign/registration/ICAO | Core "follow a flight" use case | No | No | No | None | 3 | planned | — | `TrackedFlight` model stubbed now |
+| Track by flight # / callsign | Core "follow a flight" use case | Yes | Yes (entry + live state) | No | None | 3 | done | Native (27 flight-tracking + 7 config) + PWA (12) | Direct `/v2/callsign` lookup on an adaptive cadence; ETA from position + groundspeed against a user-supplied destination. See `docs/DISPLAY_UI.md` |
+| Track by registration / ICAO hex | Same, other identifiers | No | No | No | None | 3 | planned | — | Endpoints exist (`/v2/reg`, `/v2/hex`) and the poller is structured for them; only callsign matching is wired up |
+| Arrival ETA | "When do I leave to collect someone" | Yes | Yes | No | None | 3 | done | Native ETA/phase tests | **Estimated from current groundspeed, not a published schedule** — ADS-B carries no timetable, and nothing here claims otherwise |
+| "Leave now" alert | Departure prompt for a pickup | No | No | No | None | 3 | future | — | Needs the stubbed `AlertRule` model and a delivery path; ETA + countdown is shipped, the alert on top of it is not |
 | Airport mode (departures/arrivals) | Category feature | No | No | No | Provider schedule data (rare/unreliable on ADS-B-only sources) | 3 | future | — | Must not claim schedule accuracy from position-only sources |
 
 ## Core2 display modes
@@ -89,7 +92,7 @@ The one feature where the two boards genuinely differ rather than merely sharing
 | Compact list (3-5 aircraft) | Secondary mode | No | No | No | None | 2 | planned | — | |
 | Flight board | Secondary mode | No | No | No | None | 2 | planned | — | |
 | Minimal mode | Secondary mode | No | No | No | None | 2 | planned | — | |
-| Tracked-flight mode | Secondary mode | No | No | No | None | 3 | planned | — | |
+| Tracked-flight mode | Secondary mode | Yes | Yes | No | None | 3 | done | Native + PWA tests | Takes over the primary page while a flight is being followed (tab relabels FLIGHT→TRACK), reverts on touchdown — so the board stays at three pages and the Core2's three-button mapping is unchanged |
 | Clock/idle mode | No-data fallback | Yes | No | No | None | 1 | done | Native state-machine test | Shown when zero matching aircraft, never a blank/loading screen |
 | Explicit status states (no-match / waiting / source-unavailable / wifi-down / config-required / stale) | Reliability requirement | Yes | Yes (mirrors) | Yes | None | 1 | done | Native + gateway + PWA tests | Core requirement, not deferred |
 

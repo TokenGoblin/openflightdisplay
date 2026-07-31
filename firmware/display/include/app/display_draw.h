@@ -104,4 +104,15 @@ void drawStatusCell(const CellRect& cell, const ofd::AircraftViewModel& vm);
 // rather than being retyped in each FLIGHT renderer.
 void drawMetricGrid(const ofd::AircraftViewModel& vm);
 
+// The board's secondary content area, drawn by whichever screen fills the
+// primary column. Implemented per board in display_flight_<board>.cpp:
+// a no-op where the panel has no room for one (Core2), the
+// nearby-traffic board where it does (Tab5).
+//
+// It's a hook rather than a call inside the Tab5 FLIGHT renderer because
+// more than one primary screen needs it -- the tracked-flight page would
+// otherwise leave a 500px column blank on that panel. `ageSeconds` and
+// `stale` describe the freshness of the underlying aircraft list.
+void drawSecondaryColumn(uint32_t ageSeconds, bool stale);
+
 }  // namespace ofd::app::draw

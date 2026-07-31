@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include "domain/flight_tracking.h"
+
 namespace ofd::app {
 
 namespace {
@@ -19,7 +21,11 @@ char g_bodyBuffer[kBodyBufferCapacity];
 StaticJsonDocument<128> g_errorDoc;
 StaticJsonDocument<192> g_pairRequestDoc;
 StaticJsonDocument<192> g_pairResponseDoc;
-StaticJsonDocument<256> g_statusDoc;
+// Raised from 256 when /api/v1/status gained the nested trackedFlight
+// object. ArduinoJson silently drops members once a StaticJsonDocument is
+// full rather than erroring, so an undersized capacity here shows up as
+// fields quietly missing from a 200 response.
+StaticJsonDocument<640> g_statusDoc;
 StaticJsonDocument<kBodyBufferCapacity> g_configWrapperDoc;
 
 void generatePairingToken(char* out, size_t outLen) {
@@ -566,8 +572,28 @@ void registerPairingRoutes(AsyncWebServer& server, AppContext& ctx) {
     if (ctx.hasLatestAircraft) {
       g_statusDoc["lastAircraftUpdateAgeSeconds"] = (millis() - ctx.lastAircraftUpdateAtMs) / 1000;
     }
+    // Live tracked-flight state. Derived, never configured -- the
+    // configuration side of this lives on /api/v1/config, and mixing the
+    // two would invite a client to try writing an ETA.
+    if (ctx.hasConfig && ctx.config.hasTrackedFlight) {
+      JsonObject tracking = g_statusDoc.createNestedObject("trackedFlight");
+      tracking["flight"] = ctx.config.trackedFlight.label;
+      tracking["callsign"] = ctx.config.trackedFlight.callsign;
+      tracking["destinationIcao"] = ctx.config.trackedFlight.destinationIcao;
+      tracking["phase"] = ofd::flightPhaseWord(ctx.trackedProgress.phase);
+      tracking["destinationResolved"] = !ctx.trackedDestinationUnresolved;
+      if (ctx.trackedProgress.hasEta) {
+        tracking["minutesRemaining"] = ctx.trackedProgress.minutesRemaining;
+      }
+      if (ctx.trackedProgress.hasDistance) {
+        tracking["distanceToDestinationNm"] = ctx.trackedProgress.distanceToDestinationKm / 1.852;
+      }
+      if (ctx.trackedEverSeen) {
+        tracking["secondsSinceContact"] = ctx.trackedProgress.secondsSinceContact;
+      }
+    }
     g_statusDoc["freeHeapBytes"] = ESP.getFreeHeap();
-    char buf[256];
+    char buf[512];
     const size_t len = serializeJson(g_statusDoc, buf, sizeof(buf));
     r->send(200, "application/json", String(buf, len));
   });
@@ -575,8 +601,14 @@ void registerPairingRoutes(AsyncWebServer& server, AppContext& ctx) {
   server.on("/api/v1/config", HTTP_GET, [&ctx](AsyncWebServerRequest* r) {
     if (!checkBearerToken(r, ctx)) { sendJsonError(r, 401, "invalid_or_missing_pairing_token"); return; }
     if (!ctx.hasConfig) { sendJsonError(r, 404, "no_config"); return; }
-    char buf[512];
+    // Sized against domain/config.cpp's kConfigJsonCapacity, not eyeballed:
+    // serializeDeviceConfig returns 0 rather than truncating when the
+    // buffer is short, which would surface as an empty 200 body. A full
+    // config with a monitoring area, a display profile and a tracked
+    // flight no longer fits the 512 this used to be.
+    char buf[768];
     const size_t len = serializeDeviceConfig(ctx.config, buf, sizeof(buf));
+    if (len == 0) { sendJsonError(r, 500, "config_serialize_failed"); return; }
     r->send(200, "application/json", String(buf, len));
   });
 
@@ -625,14 +657,25 @@ void registerPairingRoutes(AsyncWebServer& server, AppContext& ctx) {
       if (index + len < total) return;
       g_bodyBuffer[total] = '\0';
 
-      // Seeded with the device's own hardware identity so a PUT that
-      // omits "deviceId" (e.g. one that only updates monitoringArea or
-      // brightness) still validates -- parseAndValidateDeviceConfig
-      // keeps whatever `parsed.deviceId` already holds when the payload
-      // doesn't specify one, and now requires the *result* to be
-      // non-empty rather than silently accepting no deviceId at all.
-      DeviceConfig parsed;
-      std::strncpy(parsed.deviceId, ctx.deviceId, sizeof(parsed.deviceId) - 1);
+      // Seeded from the *current* config, not a blank one, so a partial
+      // PUT behaves the way this handler always claimed it did: one that
+      // only updates brightness keeps the monitoring area and any
+      // tracked flight, rather than silently wiping them.
+      //
+      // Previously only deviceId was carried over, which made every PUT
+      // a full replace in practice -- harmless while the setup wizard
+      // was the only client (it always sends everything), but actively
+      // wrong now that tracking a flight is a separate, smaller write.
+      // Cancelling somebody's airport countdown as a side effect of a
+      // brightness change is exactly the kind of thing nobody would
+      // think to test for.
+      //
+      // parseAndValidateDeviceConfig still requires the *result* to have
+      // a deviceId rather than silently accepting none.
+      DeviceConfig parsed = ctx.hasConfig ? ctx.config : DeviceConfig{};
+      if (parsed.deviceId[0] == '\0') {
+        std::strncpy(parsed.deviceId, ctx.deviceId, sizeof(parsed.deviceId) - 1);
+      }
       char error[64] = {0};
       bool ok = false;
 
@@ -651,8 +694,9 @@ void registerPairingRoutes(AsyncWebServer& server, AppContext& ctx) {
       ctx.hasConfig = true;
       ctx.configStore.saveConfig(parsed);
 
-      char buf[512];
+      char buf[768];  // matches the GET handler; see the note there
       const size_t respLen = serializeDeviceConfig(parsed, buf, sizeof(buf));
+      if (respLen == 0) { sendJsonError(r, 500, "config_serialize_failed"); return; }
       r->send(200, "application/json", String(buf, respLen));
     });
 }

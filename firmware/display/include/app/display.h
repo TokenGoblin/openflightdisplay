@@ -51,6 +51,18 @@ class Display {
   // docs/DISPLAY_UI.md's staleness rule.
   void renderAircraft(const ofd::AircraftState& aircraft, uint32_t ageSeconds, bool stale);
 
+  // The tracked-flight screen, shown in place of renderAircraft while a
+  // flight is being followed and hasn't landed. Reads the tracked
+  // aircraft, destination and computed progress from the ambient
+  // AppContext, the same way the header reads battery state.
+  //
+  // Board-independent: it reuses the identity block and the six-cell
+  // metric grid, so the layout profile alone adapts it to either panel.
+  // The one genuinely different case is FlightPhase::AwaitingContact,
+  // where there is no aircraft to describe yet and the screen says so
+  // explicitly rather than showing a spinner or a fabricated ETA.
+  void renderTrackedFlight();
+
   // Configured and connected, but no aircraft update has arrived yet.
   void renderSearching();
 

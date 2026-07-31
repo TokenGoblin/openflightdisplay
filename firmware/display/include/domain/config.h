@@ -7,8 +7,22 @@
 
 namespace ofd {
 
+// One flight the user has asked to follow to its destination.
+//
+// `callsign` is the *normalized* identifier actually queried against
+// ADS-B ("UAL1234"); `label` is what the user typed ("UA1234"), kept
+// verbatim so the screen shows them the flight number they know rather
+// than a translation of it. See domain/flight_tracking.h for why those
+// differ, and why the destination has to be supplied rather than
+// discovered.
+struct TrackedFlightConfig {
+  char callsign[12] = {0};
+  char label[12] = {0};
+  char destinationIcao[5] = {0};
+};
+
 // Firmware-side mirror of the device configuration, scoped to what
-// the Core2 itself needs. Fixed-size buffers only — no heap string
+// the device itself needs. Fixed-size buffers only — no heap string
 // growth in the config path.
 struct DeviceConfig {
   char deviceId[32] = {0};
@@ -16,6 +30,12 @@ struct DeviceConfig {
 
   bool hasMonitoringArea = false;
   CircleMonitoringArea monitoringArea;
+
+  // Optional and expected to come and go: a tracked flight is set for
+  // one trip to the airport and cleared afterwards, unlike the
+  // monitoring area which is set once at pairing.
+  bool hasTrackedFlight = false;
+  TrackedFlightConfig trackedFlight;
 
   uint8_t brightness = 200;
 };

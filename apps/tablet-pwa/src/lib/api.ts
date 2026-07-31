@@ -6,7 +6,7 @@ import {
   type Core2StatusResponse,
   type GatewayStatusResponse,
 } from "@openflightdisplay/protocol";
-import type { DeviceConfiguration } from "@openflightdisplay/shared-models";
+import type { DeviceConfiguration, TrackedFlight } from "@openflightdisplay/shared-models";
 import { DeviceConfigurationSchema } from "@openflightdisplay/shared-models";
 
 export class ApiError extends Error {
@@ -61,6 +61,33 @@ export async function putCore2Config(core2BaseUrl: string, pairingToken: string,
     // serializeDeviceConfig(). Parsing it as {config: ...} here threw a
     // ZodError (not an ApiError), which showed up to the user as a
     // generic "Setup failed unexpectedly" with no useful detail.
+    (body) => DeviceConfigurationSchema.parse(body),
+  );
+}
+
+/**
+ * Starts or stops following a flight, as a deliberately partial config
+ * write: only `trackedFlight` is sent, so the device's monitoring area,
+ * name and brightness are left exactly as they are. Pass `null` to stop.
+ *
+ * This relies on the device treating an absent key as "leave alone" and
+ * an explicit null as "clear" — see docs/PROTOCOL.md. Sending a whole
+ * DeviceConfiguration here instead would mean round-tripping every other
+ * setting through the browser just to start a countdown, and would make
+ * a stale local copy able to silently revert them.
+ */
+export async function putTrackedFlight(
+  core2BaseUrl: string,
+  pairingToken: string,
+  trackedFlight: TrackedFlight | null,
+) {
+  return requestJson(
+    `${core2BaseUrl}/api/v1/config`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${pairingToken}` },
+      body: JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION, config: { trackedFlight } }),
+    },
     (body) => DeviceConfigurationSchema.parse(body),
   );
 }

@@ -15,6 +15,12 @@
 
 namespace ofd::app {
 
+// No secondary column on a 320x240 panel -- the primary content already
+// fills it. See app/display_draw.h.
+namespace draw {
+void drawSecondaryColumn(uint32_t, bool) {}
+}  // namespace draw
+
 void Display::renderAircraft(const ofd::AircraftState& aircraft, uint32_t ageSeconds, bool stale) {
   ofd::AircraftViewModel vm;
   ofd::buildAircraftViewModel(aircraft, ageSeconds, stale, vm);

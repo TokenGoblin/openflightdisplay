@@ -105,6 +105,13 @@ void drawTrafficBoard(uint32_t ageSeconds, bool stale) {
 
 }  // namespace
 
+namespace draw {
+// This panel's secondary column is the nearby-traffic board. Exposed
+// through the hook in app/display_draw.h so every primary screen gets
+// it -- the tracked-flight page would otherwise leave 500px blank.
+void drawSecondaryColumn(uint32_t ageSeconds, bool stale) { drawTrafficBoard(ageSeconds, stale); }
+}  // namespace draw
+
 void Display::renderAircraft(const ofd::AircraftState& aircraft, uint32_t ageSeconds, bool stale) {
   ofd::AircraftViewModel vm;
   ofd::buildAircraftViewModel(aircraft, ageSeconds, stale, vm);
@@ -113,7 +120,7 @@ void Display::renderAircraft(const ofd::AircraftState& aircraft, uint32_t ageSec
   draw::drawHeader("NEAREST AIRCRAFT");
   draw::drawIdentityBlock(vm);
   draw::drawMetricGrid(vm);
-  drawTrafficBoard(ageSeconds, stale);
+  draw::drawSecondaryColumn(ageSeconds, stale);
   draw::drawTabBar();
   draw::endFrame();
 }

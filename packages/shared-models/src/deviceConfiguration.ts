@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { MonitoringAreaSchema } from "./monitoringArea.js";
 import { DisplayProfileSchema } from "./displayProfile.js";
+import { TrackedFlightSchema } from "./trackedFlight.js";
 
 /**
  * A single Core2's configuration, as stored on the device (LittleFS) and
@@ -13,6 +14,16 @@ export const DeviceConfigurationSchema = z.object({
   deviceName: z.string().min(1).max(64).default("OpenFlightDisplay"),
   gatewayUrl: z.string().url().optional(),
   monitoringArea: MonitoringAreaSchema.optional(),
+  /**
+   * A flight being followed to its destination, or null to stop.
+   *
+   * Three states, and the difference matters on the wire: the key being
+   * *absent* leaves any existing tracking alone (so a PUT that only
+   * changes brightness doesn't cancel somebody's airport run), an
+   * explicit `null` stops tracking, and an object starts it. See
+   * `docs/PROTOCOL.md`.
+   */
+  trackedFlight: TrackedFlightSchema.nullable().optional(),
   filterProfileId: z.string().optional(),
   displayProfile: DisplayProfileSchema.default({
     mode: "single-aircraft",

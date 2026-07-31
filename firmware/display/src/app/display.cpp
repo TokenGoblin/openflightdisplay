@@ -265,7 +265,13 @@ namespace {
 
 const char* tabLabel(DetailPage page) {
   switch (page) {
-    case DetailPage::Flight: return "FLIGHT";
+    // The primary page relabels itself while a flight is being followed,
+    // because that's what it's showing. This keeps the board at three
+    // pages rather than four -- which matters on the Core2, where each
+    // tab column sits above one physical button and a fourth would have
+    // nowhere to live.
+    case DetailPage::Flight:
+      return (s_ctx != nullptr && s_ctx->trackingActive()) ? "TRACK" : "FLIGHT";
     case DetailPage::Detail: return "DETAIL";
     case DetailPage::System: return "SYSTEM";
   }
@@ -630,6 +636,100 @@ void Display::renderLocationRequired(const char* ipAddress, const char* pairingC
   gfx.setTextColor(COLOR_TEXT_DIM, COLOR_BACKGROUND);
   gfx.drawString("SCAN QR OR TYPE MANUALLY", textX, kSetupHintY);
 
+  draw::endFrame();
+}
+
+void Display::renderTrackedFlight() {
+  if (s_ctx == nullptr) return;
+  const ofd::TrackedFlightConfig& tracked = s_ctx->config.trackedFlight;
+  const ofd::FlightProgress& progress = s_ctx->trackedProgress;
+
+  draw::clearOperationalBody();
+
+  char title[32];
+  std::snprintf(title, sizeof(title), "TRACKING %s", tracked.label);
+  draw::drawHeader(title);
+
+  auto& gfx = draw::gfx();
+
+  // Nothing has been heard from this flight yet. That is the normal
+  // state before pushback -- and also what a mistyped flight number
+  // looks like -- so the screen says which flight it's waiting for and
+  // for how long, rather than showing a spinner or inventing an ETA.
+  if (progress.phase == ofd::FlightPhase::AwaitingContact) {
+    char body[48];
+    if (s_ctx->trackedDestinationUnresolved) {
+      std::snprintf(body, sizeof(body), "UNKNOWN AIRPORT %s", tracked.destinationIcao);
+      draw::drawStatusBody("CHECK DESTINATION", body, "TRACKING CANNOT START");
+    } else {
+      std::snprintf(body, sizeof(body), "WAITING FOR %s", tracked.label);
+      draw::drawStatusBody(body, "NOT YET TRANSMITTING", "NORMAL BEFORE DEPARTURE");
+    }
+    draw::drawSecondaryColumn(0, false);
+    draw::drawTabBar();
+    draw::endFrame();
+    return;
+  }
+
+  ofd::AircraftViewModel vm;
+  ofd::buildAircraftViewModel(s_ctx->trackedAircraft, progress.secondsSinceContact,
+                              progress.phase == ofd::FlightPhase::LostContact, vm);
+  draw::drawIdentityBlock(vm);
+  draw::drawGridFrame();
+
+  // The six cells answer, in reading order, the only questions that
+  // matter when you're deciding whether to get in the car: when, how
+  // far, where, how high, how fast, what's it doing.
+  char eta[8];
+  ofd::formatMinutesRemaining(progress.hasEta, progress.minutesRemaining, eta, sizeof(eta));
+  draw::drawCellLabel(draw::gridCell(0, 0), "ARRIVES IN");
+  draw::drawCellValueWithUnit(draw::gridCell(0, 0), eta, progress.hasEta ? "MIN" : "",
+                              progress.hasEta ? COLOR_GOOD : COLOR_TEXT_SECONDARY);
+
+  char togo[12];
+  if (progress.hasDistance) {
+    std::snprintf(togo, sizeof(togo), "%.0f", progress.distanceToDestinationKm / 1.852);
+  } else {
+    std::strcpy(togo, kPlaceholderDash);
+  }
+  draw::drawCellLabel(draw::gridCell(1, 0), "TO GO");
+  draw::drawCellValueWithUnit(draw::gridCell(1, 0), togo, progress.hasDistance ? "NM" : "",
+                              COLOR_TEXT_PRIMARY);
+
+  draw::drawCellLabel(draw::gridCell(2, 0), "DEST");
+  draw::drawCellValueWithUnit(draw::gridCell(2, 0),
+                              s_ctx->trackedDestination.valid ? s_ctx->trackedDestination.icao
+                                                              : tracked.destinationIcao,
+                              "", COLOR_ACCENT);
+
+  draw::drawCellLabel(draw::gridCell(0, 1), "ALT");
+  draw::drawCellValueWithUnit(draw::gridCell(0, 1), vm.hasAltitude ? vm.altitudeValue : kPlaceholderDash,
+                              (vm.hasAltitude && !vm.altitudeIsGround) ? ofd::AircraftViewModel::kAltitudeUnit : "",
+                              COLOR_TEXT_PRIMARY);
+
+  draw::drawCellLabel(draw::gridCell(1, 1), "SPEED");
+  draw::drawCellValueWithUnit(draw::gridCell(1, 1), vm.hasSpeed ? vm.speedValue : kPlaceholderDash,
+                              vm.hasSpeed ? ofd::AircraftViewModel::kSpeedUnit : "", COLOR_TEXT_PRIMARY);
+
+  // Phase gets the same colored accent-bar treatment as the STATUS cell
+  // on the nearest-aircraft screen, so the two pages read alike.
+  const ofd::FlightPhase phase = progress.phase;
+  const uint16_t phaseColor = (phase == ofd::FlightPhase::LostContact)  ? COLOR_CAUTION
+                              : (phase == ofd::FlightPhase::Approaching) ? COLOR_GOOD
+                                                                         : COLOR_TEXT_PRIMARY;
+  const draw::CellRect phaseCell = draw::gridCell(2, 1);
+  gfx.fillRect(phaseCell.x, phaseCell.y + kGridLabelOffsetY, kStatusAccentBarW,
+               phaseCell.h - kGridLabelOffsetY - kStatusAccentBarBottomInset, phaseColor);
+  draw::drawCellLabel(phaseCell, "STATUS");
+  const theme::FontSpec phaseFallback = FONT_VALUE_SMALL();
+  draw::drawFitText(gfx, ofd::flightPhaseWord(phase), phaseCell.x + kGridCellPadX + kStatusAccentTextGap,
+                    phaseCell.y + kGridValueOffsetY,
+                    phaseCell.w - kGridCellPadX * 2 - kStatusAccentTextGap, FONT_VALUE_LARGE(),
+                    &phaseFallback, phaseColor, COLOR_BACKGROUND, textdatum_t::top_left);
+
+  draw::drawSecondaryColumn(progress.secondsSinceContact,
+                            phase == ofd::FlightPhase::LostContact);
+  draw::drawTabBar();
   draw::endFrame();
 }
 

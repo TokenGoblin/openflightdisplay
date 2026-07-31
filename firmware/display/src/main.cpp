@@ -121,7 +121,9 @@ void enterProvisioningMode() {
 }
 
 void startDataSource() {
-  if (g_ctx.hasConfig && g_ctx.config.hasMonitoringArea) {
+  // Either job is reason enough to start the poll task -- a device that
+  // is only following one flight still needs it running.
+  if (g_ctx.hasConfig && (g_ctx.config.hasMonitoringArea || g_ctx.config.hasTrackedFlight)) {
     g_adsbProvider.begin(g_ctx);
     g_ctx.providerStarted = true;
   }
@@ -179,6 +181,21 @@ void renderCurrentState() {
   // checks below rather than being blocked by them.
   if (g_ctx.currentPage == DetailPage::System) {
     g_display.renderSystemInfo();
+    return;
+  }
+
+  // A tracked flight takes over the primary page for as long as it's
+  // being followed. The user asked for this specific flight, so while
+  // it's in the air it outranks whatever happens to be overhead -- and
+  // once it lands, trackingActive() goes false and the page reverts to
+  // nearest-aircraft on its own.
+  //
+  // Checked before the provider-health and aircraft-presence guards
+  // below: those describe the *nearest-aircraft* feed, and a tracked
+  // flight has its own independent poll, freshness and failure states.
+  // An empty local sky is no reason to stop showing an inbound flight.
+  if (g_ctx.currentPage == DetailPage::Flight && g_ctx.trackingActive()) {
+    g_display.renderTrackedFlight();
     return;
   }
 

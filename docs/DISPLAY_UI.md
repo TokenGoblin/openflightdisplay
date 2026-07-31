@@ -51,6 +51,7 @@ Every state exists on both boards:
 | Searching | `renderSearching` | Configured and connected, but no aircraft update has ever arrived |
 | No traffic | `renderNoTraffic` | Provider healthy, zero aircraft currently within the configured radius |
 | Nearest aircraft | `renderAircraft` | The main screen -- an aircraft is known, fresh or briefly stale |
+| Tracked flight | `renderTrackedFlight` | A flight is being followed and hasn't landed -- takes over the primary page |
 | Flight detail | `renderAircraftDetail` / `renderDetailPlaceholder` | DETAIL tab |
 | System | `renderSystemInfo` | SYSTEM tab |
 | Firmware update | `renderOtaProgress` | OTA in progress |
@@ -139,6 +140,61 @@ says `NO OTHER AIRCRAFT` rather than sitting empty.
 Every region in both diagrams is a named constant in the board's layout
 profile (`kHeaderH`, `kCallsignY`, `kGridColBoundaries`, ...) -- the
 renderer never contains a bare layout number.
+
+## Following one flight
+
+Entering a flight number and an arrival airport (from the tablet PWA)
+turns the primary page into a countdown to that flight's touchdown —
+the "when do I leave to collect someone" case. The tab relabels itself
+`FLIGHT` → `TRACK` and reverts once the aircraft is down.
+
+**It takes over the primary page rather than adding a fourth.** The
+Core2 has three buttons sitting under three tab columns, and a fourth
+page would have nowhere to live. Taking over is also the honest
+behaviour: someone who explicitly asked to follow a flight cares more
+about it than about whatever happens to be overhead. `trackingActive()`
+in `AppContext` is the single condition, and it goes false on touchdown.
+
+The six grid cells answer, in reading order, the only questions that
+matter when deciding whether to get in the car:
+
+```
+ARRIVES IN │ TO GO  │ DEST        24 min │ 168 NM │ KSEA
+ALT        │ SPEED  │ STATUS      31,000 │ 450 KT │ ┃ ENROUTE
+```
+
+`renderTrackedFlight` is **board-independent** — it reuses the identity
+block and the same six-cell grid as the nearest-aircraft screen, so the
+layout profile alone adapts it to either panel, and the Tab5's traffic
+column keeps working through the `drawSecondaryColumn()` hook.
+
+### What the phases mean, and why the distinctions matter
+
+| Phase | Shown as | Why it's its own state |
+|---|---|---|
+| `AwaitingContact` | `WAITING FOR UA1234` | ADS-B can't see a flight before its transponder is on. Normal before pushback — **never rendered as an error**, and never with a fabricated ETA |
+| `Enroute` / `Descending` | Countdown + phase | — |
+| `Approaching` | `APPROACHING`, green | Within ~30 NM. This is the "start driving" signal |
+| `Landed` | `LANDED` | Requires **all** of: near the field, slow, *and* close to field elevation. Any one alone gives false positives on a low overflight or a go-around |
+| `LostContact` | `NO CONTACT`, amber | Seen before, now silent, not near the destination — an oceanic gap or a lost feeder. **Deliberately distinct from `Landed`**: conflating them sends someone to the airport an hour early |
+
+Height is measured against the destination's own field elevation, not sea
+level — Denver's ramp is at 5,400 ft, and a fixed altitude threshold
+would call every arrival there a landing while still airborne.
+
+### What it does not claim
+
+There is no schedule data in ADS-B. The screen says "arrives in 24 min at
+the current groundspeed" and **never** "12 minutes late" — see
+`docs/FEATURE_PARITY_MATRIX.md`'s warning about claiming schedule
+accuracy from position-only sources. The estimate is a straight line over
+current groundspeed: it ignores routing, holding and taxi time, and the
+PWA panel says so in as many words.
+
+The destination is supplied by the user, not discovered. adsb.lol's
+route-inference endpoint (`/api/0/routeset`) returns an empty `201` for
+every valid request, so there is nothing to infer from. For a pickup this
+is no hardship — you know which airport you're driving to.
 
 ## Page navigation
 

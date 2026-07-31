@@ -45,10 +45,27 @@ The pairing code is generated fresh on every boot where the device is unpaired, 
   "deviceName": "Living Room",
   "gatewayUrl": "ws://192.168.1.50:8787/ws/v1/aircraft",
   "monitoringArea": { "kind": "circle", "centerLat": 47.6, "centerLon": -122.3, "radiusKm": 15 },
+  "trackedFlight": { "flight": "UA1234", "callsign": "UAL1234", "destinationIcao": "KSEA" },
   "displayProfile": { "mode": "single-aircraft", "brightness": 200 }
 }
 ```
 `PUT` validates the full body against the shared schema before writing; a partial/invalid body is rejected with `400` and the previous config is left untouched (no partial writes).
+
+### `trackedFlight`
+
+Follows one flight to its destination. **Three distinct states, and the difference is binding:**
+
+| Value | Meaning |
+|---|---|
+| key absent | Leave existing tracking untouched — a `PUT` changing only `brightness` must not cancel someone's airport run |
+| `null` | Stop tracking |
+| object | Start tracking |
+
+- `flight` — what the user typed: a boarding-pass flight number (`"UA1234"`) or a raw ADS-B callsign (`"UAL1234"`). **The device performs the IATA→ICAO translation**, because it already carries the airline table for decoding callsigns; a second table in TypeScript would be a second source of truth that could silently disagree. Rejected with `400` if it contains no digits.
+- `callsign` — the normalized result (`"UAL1234"`), the identifier actually queried against ADS-B. Device-derived: **returned by `GET`, ignored by `PUT`.**
+- `destinationIcao` — the arrival airport, **4-letter ICAO only** (`"KSEA"`, not `"SEA"`). ADS-B carries no destination, so the user supplies it; the airport lookup that resolves it to coordinates answers `null` for IATA codes, and expanding `"SEA"` to `"KSEA"` is a North-America-only assumption. Rejected with `400` rather than guessed at.
+
+The device exposes the resulting live state (phase, ETA, distance) through `GET /api/v1/status` — it is derived, never configured.
 
 ## Gateway's REST API
 

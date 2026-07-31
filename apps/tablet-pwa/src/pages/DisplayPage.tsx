@@ -3,6 +3,8 @@ import { useAircraftFeed } from "../hooks/useAircraftFeed";
 import { StatusBanner } from "../components/StatusBanner";
 import { AircraftCard } from "../components/AircraftCard";
 import { AircraftMap } from "../components/AircraftMap";
+import { TrackFlightPanel } from "../components/TrackFlightPanel";
+import { useDeviceStatus } from "../hooks/useDeviceStatus";
 import { deriveStatus } from "../lib/status";
 import type { StoredConnection } from "../lib/storage";
 import { clearStoredConnection } from "../lib/storage";
@@ -12,6 +14,12 @@ export function DisplayPage({ connection, onReconfigure }: { connection: StoredC
   const status = deriveStatus(feed, true);
   const [isKiosk, setIsKiosk] = useState(false);
   const nearest = feed.aircraft[0];
+  // Flight tracking is a conversation with the device itself, not the
+  // gateway -- the device does the callsign polling and owns the ETA.
+  // Only available when we know the device's own LAN address, which is
+  // optional on a stored connection (a PWA paired against a gateway
+  // alone has no device to ask).
+  const device = useDeviceStatus(connection.core2BaseUrl);
 
   // Phase 1 only implements a basic circle area preview centered on the
   // first aircraft's observer reference isn't available client-side, so
@@ -60,6 +68,16 @@ export function DisplayPage({ connection, onReconfigure }: { connection: StoredC
         </div>
         <div className="display-page__sidebar">
           {nearest ? <AircraftCard aircraft={nearest} lastUpdatedAt={feed.lastUpdatedAt} /> : null}
+          {/* Hidden in kiosk mode: that's a display surface, not a
+              control surface, and a text input in it invites taps that
+              were meant for the map. */}
+          {connection.core2BaseUrl && !isKiosk ? (
+            <TrackFlightPanel
+              core2BaseUrl={connection.core2BaseUrl}
+              pairingToken={connection.pairingToken}
+              status={device.status?.trackedFlight}
+            />
+          ) : null}
         </div>
       </div>
       {isKiosk ? (

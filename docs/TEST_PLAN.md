@@ -6,9 +6,9 @@ This Phase 1 implementation session started with `git` available but no working 
 
 A physical M5Stack Core2 was then connected and used for genuine end-to-end hardware testing: full first-boot provisioning, pairing with a real gateway, live setup via the tablet PWA on an actual phone, and real aircraft data from adsb.lol. This surfaced several real bugs that no amount of code review, native testing, or even a successful `pio run` build could have caught — see the git log for the full list, but the highlights: CORS was missing on both the firmware's and the gateway's HTTP APIs (every cross-origin fetch() from the PWA was silently blocked with no indication it was CORS); the QR pairing code's in-app camera scan is fundamentally non-functional over plain HTTP (`navigator.mediaDevices` requires a secure context, which this LAN-over-HTTP system doesn't have by design); the setup wizard lost all progress on a mobile browser tab reload; numeric form inputs got stuck on `0` and couldn't accept negative longitude; a naive URL string-replace produced malformed gateway URLs; a genuine ESP32 stack overflow in the WebSocket client took three rounds of real diagnosis (including a symbolicated crash backtrace) to fix, ultimately requiring the WS client to run in its own dedicated FreeRTOS task; the gateway's `.env` file was never actually being loaded (silently defaulting to the mock provider the entire session); and a burst of rapid WebSocket reconnects crashed the entire gateway process via an unhandled promise rejection from a file-write race condition.
 
-Current status: **all 144 automated tests pass** (protocol 10, shared-models 11, gateway 26, tablet-pwa 26, firmware native 71), typecheck/lint/build are clean across every TypeScript workspace, and the real ESP32 firmware builds, flashes, and **runs stably on physical hardware with live aircraft data flowing continuously with no crashes**. What's still not done: Playwright end-to-end tests (no browser-automation tool was available even after installing the rest of the toolchain), and a multi-day continuous-operation/heap-leak soak test (see item 8 below).
+Current status: **all 199 automated tests pass** (protocol 10, shared-models 20, gateway 26, tablet-pwa 38, firmware native 105), typecheck/lint/build are clean across every TypeScript workspace, and the real ESP32 firmware builds, flashes, and **runs stably on physical hardware with live aircraft data flowing continuously with no crashes**. What's still not done: Playwright end-to-end tests (no browser-automation tool was available even after installing the rest of the toolchain), and a multi-day continuous-operation/heap-leak soak test (see item 8 below).
 
-> An earlier revision of this file claimed 107 total / 34 firmware tests. The firmware count had gone stale as suites were added and was never corrected; the numbers above were obtained by running every suite. The firmware total is 71 as of the M5Stack Tab5 board-support work, which added one test.
+> An earlier revision of this file claimed 107 total / 34 firmware tests. The firmware count had gone stale as suites were added and was never corrected; every number here is now obtained by running the suites rather than by editing the previous figure. Recent movement: 144 → 199, from the flight-tracking work (34 new native tests, 12 new PWA tests, 9 new shared-model tests).
 
 **Board coverage:** every automated test here is board-independent — the native suites exercise `domain/`, which by design contains no board or Arduino code at all. Neither the `core2` nor the `tab5` firmware build is exercised in CI (see `.github/workflows/firmware-native-tests.yml` for why), and **no automated test touches the Tab5 in any way**. What backs the Core2 is the manual hardware validation below; the Tab5 has no equivalent yet — see `docs/TAB5_HARDWARE.md`.
 
@@ -22,7 +22,7 @@ cd firmware/display
 pio test -e native
 ```
 
-All 71 test cases across the 7 suites below pass.
+All 105 test cases across the 8 suites below pass.
 
 Covered in Phase 1:
 - Haversine distance and bearing calculation, including degenerate cases (same point, antipodal-ish points).
@@ -31,6 +31,18 @@ Covered in Phase 1:
 - Config parsing/validation, including a deliberately corrupt payload (must fail closed, not crash).
 - Stale-record detection (age threshold behavior).
 - WebSocket aircraft-update message parsing, including a bounded/truncated payload.
+
+Flight tracking (`test_flight_tracking`, 27 cases) covers the logic nobody can debug from an airport car park:
+- ADS-B callsign padding (`"BAW249  "`) trimmed before any comparison.
+- Flight-number normalization: IATA→ICAO expansion (`UA1234` → `UAL1234`), case/separator handling, pass-through of an unrecognised carrier rather than mangling it, rejection of input with no digits.
+- Phase transitions, including the three that are easy to get wrong and expensive when wrong:
+  - **A fast, high overflight of the destination is not a landing** — touchdown requires near *and* slow *and* low together.
+  - **Height is measured above field elevation, not sea level** — otherwise every arrival at Denver reads as landed while still airborne.
+  - **Landed beats lost-contact** — an aircraft that goes quiet *at the field* has arrived; one that goes quiet mid-ocean has not, and conflating them sends someone to the airport an hour early.
+- ETA edge cases: a stationary aircraft has a distance but no ETA (no division by zero), and no destination yields neither.
+- The adaptive poll interval tightens monotonically as arrival approaches, and stays within bounds in every phase.
+
+Tracked-flight config (`test_config`, 7 of its 15 cases) covers the three-way wire semantics: an absent key preserves existing tracking (so a brightness-only PUT doesn't cancel someone's airport run), an explicit null clears it, IATA airport codes are rejected rather than guessed at, and the whole thing survives a serialize round-trip.
 
 Deferred to Phase 2+ (documented, not implemented): polygon/cone boundary tests, multi-area tests, unit-conversion tests, touch-interaction tests, low-memory/heap-pressure tests, LittleFS-write-failure simulation, WPA3 connection tests. These require either more display/filter features to exist first, or physical hardware to observe real memory behavior.
 
@@ -66,7 +78,7 @@ npm install
 npm test
 ```
 
-All 26 tests across 6 suites pass.
+All 38 tests across 7 suites pass.
 
 Covered in Phase 1:
 - Setup-wizard step transitions (pairing → location → radius → confirm), including manual-entry and mocked-geolocation paths, and resuming from a persisted mid-wizard state.
@@ -74,6 +86,7 @@ Covered in Phase 1:
 - Status-banner state transitions (connecting, connected, stale, source-unavailable, wifi-down-equivalent/gateway-unreachable).
 - Config persisted to and rehydrated from `localStorage`, confirming Wi-Fi credentials are never touched by the PWA.
 - URL normalization/validation helpers (`lib/url.ts`) — regression tests for a real bug where a bare `ip:port` (no scheme) silently produced a malformed `ws://` URL.
+- Tracked-flight panel: the flight number is sent verbatim (IATA expansion is the device's job, so there is only one airline table), an IATA airport code is rejected before any request is made, no-ETA renders as a dash rather than `0` ("landing now"), and lost signal is explicitly described as not a landing.
 
 Deferred: Playwright end-to-end tests (no browser-automation toolchain in this sandbox this session). Camera-based QR scanning is mocked in unit tests, and separately confirmed via real hardware testing to be **fundamentally non-functional** in this system's normal (plain-HTTP-over-LAN) deployment, since `navigator.mediaDevices` requires a secure context — manual entry is the PWA's default and primary pairing path as a result, not a fallback. Full kiosk-mode wake-lock behavior is still browser-dependent and unverified.
 

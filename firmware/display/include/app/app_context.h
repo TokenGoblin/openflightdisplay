@@ -5,6 +5,7 @@
 #include "app/page.h"
 #include "domain/battery.h"
 #include "domain/config.h"
+#include "domain/flight_tracking.h"
 #include "domain/protocol.h"
 
 namespace ofd::app {
@@ -56,6 +57,31 @@ struct AppContext {
 
   ProviderHealth providerHealth = ProviderHealth::Ok;
   bool providerStarted = false;
+
+  // ---- tracked flight (see domain/flight_tracking.h) ----
+  //
+  // Written by the poll task, read by the renderer, same
+  // no-mutex-by-design rule as everything else in this struct.
+  //
+  // `trackedEverSeen` is the field that distinguishes "hasn't departed
+  // yet" from "we lost it", which no single position report can express
+  // and which the two states are rendered very differently from.
+  ofd::Airport trackedDestination;
+  ofd::AircraftState trackedAircraft;
+  bool trackedEverSeen = false;
+  uint32_t trackedLastSeenAtMs = 0;
+  ofd::FlightProgress trackedProgress;
+  // Set when the destination ICAO didn't resolve to an airport. A
+  // typo'd airport is otherwise indistinguishable from a flight that
+  // hasn't taken off, and only one of those is the user's mistake.
+  bool trackedDestinationUnresolved = false;
+
+  // True once the configured flight is being followed and hasn't landed.
+  // The primary page shows the tracked flight while this holds.
+  bool trackingActive() const {
+    return hasConfig && config.hasTrackedFlight &&
+           trackedProgress.phase != ofd::FlightPhase::Landed;
+  }
 
   ofd::BatteryState battery;
 };

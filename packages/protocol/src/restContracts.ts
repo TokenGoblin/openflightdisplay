@@ -23,13 +23,50 @@ export const PairClaimErrorSchema = z.object({
 export type PairClaimError = z.infer<typeof PairClaimErrorSchema>;
 
 /** GET /api/v1/status (served by the Core2 itself, no auth) */
+/**
+ * Live tracked-flight state, as reported by the device.
+ *
+ * Derived, never configured — the write side is `trackedFlight` on
+ * `DeviceConfiguration`. Every numeric field is optional because each
+ * one genuinely may not exist yet: a flight that hasn't switched its
+ * transponder on has no distance, and one stopped at the gate has no
+ * ETA. See firmware/display/include/domain/flight_tracking.h.
+ */
+export const TrackedFlightStatusSchema = z.object({
+  flight: z.string().min(1),
+  callsign: z.string().min(1),
+  destinationIcao: z.string().min(3),
+  phase: z.enum(["WAITING", "ENROUTE", "DESCENDING", "APPROACHING", "LANDED", "NO CONTACT"]),
+  /** False when the destination ICAO didn't resolve — i.e. a typo, not a flight yet to depart. */
+  destinationResolved: z.boolean(),
+  minutesRemaining: z.number().min(0).optional(),
+  distanceToDestinationNm: z.number().min(0).optional(),
+  secondsSinceContact: z.number().min(0).optional(),
+});
+export type TrackedFlightStatus = z.infer<typeof TrackedFlightStatusSchema>;
+
 export const Core2StatusResponseSchema = z.object({
   schemaVersion: z.literal(CURRENT_SCHEMA_VERSION),
   deviceId: z.string().min(1),
   firmwareVersion: z.string().min(1),
   wifiState: z.enum(["connected", "disconnected", "provisioning"]),
-  gatewayConnectionState: z.enum(["connected", "connecting", "disconnected", "unconfigured"]),
+  /**
+   * Health of the device's own data source. The firmware polls adsb.lol
+   * directly, so this — not gatewayConnectionState — is what it actually
+   * reports.
+   */
+  providerState: z.enum(["ok", "degraded", "unavailable"]).optional(),
+  /**
+   * Optional, and unset by current firmware. It was required here while
+   * the device was a WebSocket client of the gateway; once it became a
+   * standalone poller the field stopped being sent, and this schema was
+   * never updated — which made `getCore2Status()` throw a ZodError
+   * against any real device. Kept (optional) rather than deleted so a
+   * gateway-connected mode can repopulate it without a schema bump.
+   */
+  gatewayConnectionState: z.enum(["connected", "connecting", "disconnected", "unconfigured"]).optional(),
   lastAircraftUpdateAgeSeconds: z.number().min(0).optional(),
+  trackedFlight: TrackedFlightStatusSchema.optional(),
   freeHeapBytes: z.number().min(0),
 });
 export type Core2StatusResponse = z.infer<typeof Core2StatusResponseSchema>;
