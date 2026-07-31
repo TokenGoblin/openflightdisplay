@@ -1,0 +1,38 @@
+<Project>
+
+  <!--
+    Shared settings for every project in the OpenFlightDisplay Desktop solution.
+
+    Nullable reference types are enabled solution-wide and warnings are errors:
+    the domain models this port is based on distinguish "field absent" from
+    "field zero" as a load-bearing rule (docs/PROTOCOL.md), and a nullable
+    warning is usually that rule being violated.
+  -->
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <!-- Version is derived from git tags in CI; this is the local fallback. -->
+  <PropertyGroup>
+    <VersionPrefix>0.1.0</VersionPrefix>
+    <Product>OpenFlightDisplay Desktop</Product>
+    <Company>OpenFlightDisplay</Company>
+    <Copyright>MIT — see LICENSE</Copyright>
+    <RepositoryUrl>https://github.com/TokenGoblin/openflightdisplay</RepositoryUrl>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>portable</DebugType>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+</Project>

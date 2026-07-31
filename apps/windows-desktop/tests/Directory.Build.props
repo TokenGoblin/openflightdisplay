@@ -1,0 +1,28 @@
+<Project>
+
+  <!--
+    Test-project overrides. Imports the solution-wide props first, then relaxes
+    the few analyzer rules that fight readable test code.
+
+    Everything here is scoped to tests/ on purpose — the strict settings still
+    apply in full to every project under src/.
+  -->
+
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <!--
+      CA1707 (no underscores in member names) is wrong for xUnit. Underscored
+      test names are the ecosystem convention and read as sentences in test
+      output, which is the entire point: a failing
+      "Boundary_exactly_at_threshold_is_not_stale" states the broken rule
+      without anyone opening the file.
+
+      CA1861 flags constant arrays passed as arguments. In tests those are
+      expected-value literals; hoisting them to static fields moves the
+      assertion away from the thing it asserts.
+    -->
+    <NoWarn>$(NoWarn);CA1707;CA1861</NoWarn>
+  </PropertyGroup>
+
+</Project>

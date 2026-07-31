@@ -31,5 +31,24 @@ Thumbs.db
 !.vscode/extensions.json
 .idea/
 
+# .NET / Windows desktop app
+bin/
+obj/
+*.user
+*.suo
+.vs/
+apps/windows-desktop/**/AppPackages/
+apps/windows-desktop/**/BundleArtifacts/
+apps/windows-desktop/**/Generated?Files/
+TestResults/
+*.coverage
+*.trx
+
+# Signing material — never committed (see docs/WINDOWS_DESKTOP.md)
+*.pfx
+*.snk
+*.cer
+*.p12
+
 # Logs
 *.log
