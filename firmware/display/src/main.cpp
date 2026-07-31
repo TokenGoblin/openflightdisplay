@@ -51,6 +51,14 @@ uint32_t g_lastRenderAtMs = 0;
 uint32_t g_lastOtaAtMs = 0;
 uint32_t g_lastWifiStatusCheckAtMs = 0;
 
+// Redraw suppression -- see renderSignature(). The forced interval is
+// the safety net for anything the signature doesn't capture; a minute is
+// short enough that nobody would notice, long enough that a static
+// screen still costs ~1 repaint/minute instead of 12.
+constexpr uint32_t kForceRedrawIntervalMs = 60000;
+uint32_t g_lastRenderSignature = 0;
+uint32_t g_lastPaintAtMs = 0;
+
 bool g_otaInProgress = false;
 uint8_t g_otaPercent = 0;
 
@@ -152,6 +160,81 @@ void enterConnectedMode() {
   } else {
     startDataSource();
   }
+}
+
+// A cheap hash of everything that determines what is currently on
+// screen. Redraws are skipped while this is unchanged.
+//
+// Worth doing because several screens are genuinely static for long
+// stretches: WI-FI OFFLINE, SEARCHING, NO NEARBY AIRCRAFT, and -- the
+// one that motivated this -- "WAITING FOR UA1234", which a device
+// happily sits on for the forty minutes before a flight pushes back. At
+// kRenderIntervalMs that was ~480 full repaints of an identical screen
+// per hour. On the Tab5 each of those pushes ~1.84MB over MIPI-DSI.
+//
+// Screens that really do change every few seconds (the data-age caption,
+// the SYSTEM page's uptime) hash differently each time and still redraw,
+// which is correct rather than a missed optimisation.
+//
+// The forced-redraw interval in loop() is the safety net: if a future
+// field is drawn but forgotten here, the worst case is a screen up to
+// kForceRedrawIntervalMs stale, never one that is permanently wrong.
+uint32_t renderSignature() {
+  uint32_t h = 2166136261u;  // FNV-1a
+  const auto mix = [&h](const void* data, size_t len) {
+    const uint8_t* p = static_cast<const uint8_t*>(data);
+    for (size_t i = 0; i < len; i++) {
+      h ^= p[i];
+      h *= 16777619u;
+    }
+  };
+  const auto mixU32 = [&mix](uint32_t v) { mix(&v, sizeof(v)); };
+
+  mixU32(static_cast<uint32_t>(g_ctx.wifiState));
+  mixU32(g_ctx.wifiConnected ? 1u : 0u);
+  mixU32(static_cast<uint32_t>(g_ctx.currentPage));
+  mixU32(g_ctx.hasConfig ? 1u : 0u);
+  mixU32(g_ctx.config.hasMonitoringArea ? 1u : 0u);
+  mixU32(static_cast<uint32_t>(g_ctx.providerHealth));
+  mixU32(g_ctx.hasLatestAircraft ? 1u : 0u);
+  mixU32(static_cast<uint32_t>(g_ctx.latestAircraft.count));
+
+  // Header: battery pill and Wi-Fi icon.
+  mixU32(g_ctx.battery.valid ? g_ctx.battery.percent + 1u : 0u);
+  mixU32(g_ctx.battery.charging ? 1u : 0u);
+
+  // Nearest aircraft, including the age caption -- which ticks, so this
+  // screen legitimately repaints while an aircraft is on it.
+  if (g_ctx.hasLatestAircraft && g_ctx.latestAircraft.count > 0) {
+    const AircraftState& a = g_ctx.latestAircraft.items[0];
+    mix(a.icaoHex, sizeof(a.icaoHex));
+    mix(a.callsign, sizeof(a.callsign));
+    mixU32(static_cast<uint32_t>(a.altitudeFt));
+    mixU32(static_cast<uint32_t>(a.groundSpeedKt));
+    mixU32(static_cast<uint32_t>(a.trackHeadingDeg));
+    mixU32(static_cast<uint32_t>(a.verticalRateFtPerMin));
+    mixU32(static_cast<uint32_t>(a.emergencyState));
+    mixU32(a.onGround ? 1u : 0u);
+    mixU32((millis() - g_ctx.lastAircraftUpdateAtMs) / 1000);
+  }
+
+  // Tracked flight. The countdown is in whole minutes, so this is stable
+  // between updates rather than churning every second.
+  if (g_ctx.config.hasTrackedFlight) {
+    mix(g_ctx.config.trackedFlight.callsign, sizeof(g_ctx.config.trackedFlight.callsign));
+    mixU32(static_cast<uint32_t>(g_ctx.trackedProgress.phase));
+    mixU32(g_ctx.trackedProgress.hasEta ? g_ctx.trackedProgress.minutesRemaining + 1u : 0u);
+    mixU32(static_cast<uint32_t>(g_ctx.trackedProgress.distanceToDestinationKm));
+    mixU32(g_ctx.trackedDestinationUnresolved ? 1u : 0u);
+  }
+
+  // The SYSTEM page shows a ticking uptime, so it must keep repainting
+  // while it is the visible page.
+  if (g_ctx.currentPage == DetailPage::System) {
+    mixU32(millis() / 1000);
+  }
+
+  return h;
 }
 
 void renderCurrentState() {
@@ -336,6 +419,11 @@ void loop() {
     g_ctx.currentPage = requestedPage;
     renderCurrentState();
     g_lastRenderAtMs = millis();
+    // Record what was just painted, or the scheduled check below would
+    // see a changed signature (the page is part of it) and immediately
+    // repaint the same screen a second time.
+    g_lastPaintAtMs = g_lastRenderAtMs;
+    g_lastRenderSignature = renderSignature();
   }
 
   // Detect a Wi-Fi drop after the initial connect -- WiFi.status() is
@@ -356,7 +444,18 @@ void loop() {
   pollBattery(g_ctx);
 
   if (millis() - g_lastRenderAtMs >= kRenderIntervalMs) {
-    renderCurrentState();
     g_lastRenderAtMs = millis();
+
+    // Repaint only when something visible actually changed -- or when
+    // the forced interval elapses, which bounds the cost of anything
+    // renderSignature() fails to account for to a stale screen rather
+    // than a permanently wrong one.
+    const uint32_t signature = renderSignature();
+    const bool forced = millis() - g_lastPaintAtMs >= kForceRedrawIntervalMs;
+    if (signature != g_lastRenderSignature || forced) {
+      g_lastRenderSignature = signature;
+      g_lastPaintAtMs = millis();
+      renderCurrentState();
+    }
   }
 }

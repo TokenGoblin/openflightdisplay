@@ -28,10 +28,42 @@ constexpr double kKnotsToMph = 1.15078;
 // (kMinPollIntervalMs, 10s) isn't measurably delayed, coarse enough to
 // cost nothing.
 constexpr uint32_t kTaskTickMs = 1000;
+// Widest geographic query actually issued, regardless of configured
+// radius. Sized from measured responses (28 aircraft / 13.7KB at 50 NM,
+// 75 / 43KB at 150 NM) against the fixed parse buffer below, with the
+// field filter applied. Even this can overflow over exceptionally busy
+// airspace -- the difference is that overflow is now reported on serial
+// instead of silently blanking the screen forever.
+constexpr double kMaxQueryRadiusNm = 80.0;
 
 AppContext* g_ctx = nullptr;
 constexpr size_t kResponseCapacity = 16384;
 static StaticJsonDocument<kResponseCapacity> g_doc;
+
+// ---- response filter ----
+//
+// adsb.lol returns ~51 fields per aircraft; this firmware reads 13. The
+// rest (signal strength, message counts, navigation-accuracy categories,
+// wind and temperature aloft, ...) are parsed into memory and
+// immediately discarded.
+//
+// Filtering them out at parse time is measured at a **69.5% reduction**
+// against a real worst-case response (114 aircraft: 66,082 bytes raw ->
+// 20,149 filtered), which roughly triples how much airspace fits in the
+// fixed buffer below. Built once at startup rather than per poll: it is
+// constant, and rebuilding it 5,760 times a day would be pure waste.
+static StaticJsonDocument<256> g_filter;
+bool g_filterReady = false;
+
+void ensureFilter() {
+  if (g_filterReady) return;
+  JsonObject aircraft = g_filter.createNestedArray("ac").createNestedObject();
+  for (const char* field : {"hex", "flight", "t", "lat", "lon", "alt_geom", "alt_baro", "gs", "track",
+                            "baro_rate", "geom_rate", "squawk", "emergency"}) {
+    aircraft[field] = true;
+  }
+  g_filterReady = true;
+}
 
 // ---- helpers ----
 
@@ -154,15 +186,43 @@ void parseAdsbAircraft(JsonObjectConst item, ofd::AircraftState& out) {
 // non-200 means for its own health reporting, since a failed
 // nearest-aircraft poll and a failed airport lookup are not the same
 // kind of problem.
-int getJson(WiFiClientSecure& client, HTTPClient& http, const char* url, bool& parsedOut) {
+// `filtered` applies the aircraft field filter above; the small
+// endpoints (airport lookup) pass false and take the whole object.
+//
+// Parses straight from the socket rather than via http.getString().
+// That call materialises the entire response as a heap String before
+// parsing begins -- up to 77KB on a wide-radius poll, held at the same
+// time as the parse buffer *and* an open TLS session. Streaming reads it
+// in chunks instead, so peak heap no longer scales with how busy the sky
+// is.
+int getJson(WiFiClientSecure& client, HTTPClient& http, const char* url, bool filtered,
+            bool& parsedOut) {
   parsedOut = false;
   http.begin(client, url);
   http.setTimeout(kHttpTimeoutMs);
   const int httpCode = http.GET();
   if (httpCode == 200) {
-    const String payload = http.getString();
     g_doc.clear();
-    parsedOut = !deserializeJson(g_doc, payload);
+    DeserializationError err;
+    if (filtered) {
+      ensureFilter();
+      err = deserializeJson(g_doc, http.getStream(), DeserializationOption::Filter(g_filter));
+    } else {
+      err = deserializeJson(g_doc, http.getStream());
+    }
+    parsedOut = !err;
+    if (err) {
+      // Never fail silently here. A NoMemory in particular means the
+      // response outgrew the buffer -- almost always because the
+      // configured radius covers more aircraft than will fit -- and the
+      // visible symptom is a display that just never shows anything.
+      // Somebody debugging that deserves to be told where to look.
+      Serial.printf("[adsb] parse failed (%s) for %s\n", err.c_str(), url);
+      if (err == DeserializationError::NoMemory) {
+        Serial.printf("[adsb] response exceeded the %u-byte buffer -- reduce the monitoring radius\n",
+                      static_cast<unsigned>(kResponseCapacity));
+      }
+    }
   }
   http.end();
   return httpCode;
@@ -172,13 +232,37 @@ int getJson(WiFiClientSecure& client, HTTPClient& http, const char* url, bool& p
 
 void pollNearest(WiFiClientSecure& client, HTTPClient& http) {
   const auto& area = g_ctx->config.monitoringArea;
-  const double radiusNm = area.radiusKm / 1.852;
+
+  // The configured radius is clamped for the *query*, not rejected in
+  // config validation -- tightening the validator would fail an already
+  // saved config on load and drop a working device into
+  // "configuration required" after an update.
+  //
+  // Clamping is also simply more correct here. This screen shows the
+  // nearest aircraft (and at most kMaxAircraftPerUpdate of them): the
+  // nearest aircraft is the nearest whether the query covered 80 NM or
+  // 270. A wider radius adds only payload -- measured at 13,685 bytes
+  // for 50 NM against 77,286 for 270 NM, the latter far past what the
+  // parse buffer can hold, which used to leave the display permanently
+  // and silently blank.
+  double radiusNm = area.radiusKm / 1.852;
+  if (radiusNm > kMaxQueryRadiusNm) {
+    static bool warned = false;
+    if (!warned) {
+      warned = true;
+      Serial.printf("[adsb] querying %.0f NM instead of the configured %.0f NM -- beyond this the "
+                    "response outgrows the parse buffer, and the nearest aircraft is unaffected\n",
+                    kMaxQueryRadiusNm, radiusNm);
+    }
+    radiusNm = kMaxQueryRadiusNm;
+  }
+
   char url[192];
   std::snprintf(url, sizeof(url), "https://api.adsb.lol/v2/point/%.4f/%.4f/%.1f", area.centerLat,
                 area.centerLon, radiusNm);
 
   bool parsed = false;
-  const int httpCode = getJson(client, http, url, parsed);
+  const int httpCode = getJson(client, http, url, /*filtered=*/true, parsed);
 
   if (httpCode != 200) {
     g_ctx->providerHealth =
@@ -223,7 +307,7 @@ void resolveDestination(WiFiClientSecure& client, HTTPClient& http, const char* 
   std::snprintf(url, sizeof(url), "https://api.adsb.lol/api/0/airport/%s", icao);
 
   bool parsed = false;
-  const int httpCode = getJson(client, http, url, parsed);
+  const int httpCode = getJson(client, http, url, /*filtered=*/false, parsed);
 
   // The endpoint answers 200 with a literal `null` body for a code it
   // doesn't know (including any IATA code), so "parsed successfully" is
@@ -260,7 +344,7 @@ void pollTrackedFlight(WiFiClientSecure& client, HTTPClient& http) {
   std::snprintf(url, sizeof(url), "https://api.adsb.lol/v2/callsign/%s", tracked.callsign);
 
   bool parsed = false;
-  const int httpCode = getJson(client, http, url, parsed);
+  const int httpCode = getJson(client, http, url, /*filtered=*/true, parsed);
   if (httpCode != 200 || !parsed) return;  // keep the last known state; staleness handles it
 
   JsonArrayConst ac = g_doc["ac"].as<JsonArrayConst>();

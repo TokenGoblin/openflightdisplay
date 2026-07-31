@@ -124,6 +124,18 @@ label {
   position: relative;
 }
 
+/* Placeholder while the lazily-loaded map chunk arrives. Fills the same
+   box the map will occupy so the sidebar doesn't jump when it swaps in. */
+.display-page__map-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: var(--color-text-secondary, #94a3b8);
+  font-size: 0.9rem;
+}
+
 .display-page__sidebar {
   flex: 1;
   padding: 1rem;

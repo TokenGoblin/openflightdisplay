@@ -3,10 +3,11 @@
 #include "app/config_store.h"
 #include "app/device_identity.h"
 #include "app/page.h"
+#include "domain/aircraft.h"
 #include "domain/battery.h"
 #include "domain/config.h"
 #include "domain/flight_tracking.h"
-#include "domain/protocol.h"
+#include "domain/provider_health.h"
 
 namespace ofd::app {
 

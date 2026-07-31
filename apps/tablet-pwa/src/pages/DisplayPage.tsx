@@ -1,13 +1,21 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useAircraftFeed } from "../hooks/useAircraftFeed";
 import { StatusBanner } from "../components/StatusBanner";
 import { AircraftCard } from "../components/AircraftCard";
-import { AircraftMap } from "../components/AircraftMap";
 import { TrackFlightPanel } from "../components/TrackFlightPanel";
 import { useDeviceStatus } from "../hooks/useDeviceStatus";
 import { deriveStatus } from "../lib/status";
 import type { StoredConnection } from "../lib/storage";
 import { clearStoredConnection } from "../lib/storage";
+
+// Leaflet and its tile/marker machinery are the single largest thing in
+// the bundle, and only this page uses them -- yet every first-time user
+// downloaded the whole lot before they could even reach the pairing
+// form. Splitting it out means the setup wizard, which is the only
+// screen a new user sees, no longer pays for a map it never renders.
+const AircraftMap = lazy(() =>
+  import("../components/AircraftMap").then((m) => ({ default: m.AircraftMap })),
+);
 
 export function DisplayPage({ connection, onReconfigure }: { connection: StoredConnection; onReconfigure: () => void }) {
   const feed = useAircraftFeed(connection.gatewayBaseUrl, connection.deviceId, connection.pairingToken);
@@ -64,7 +72,13 @@ export function DisplayPage({ connection, onReconfigure }: { connection: StoredC
           the map's true rendered size past the visible area. */}
       <div className="display-page__content">
         <div className="display-page__map-area">
-          <AircraftMap area={fallbackArea} aircraft={feed.aircraft} />
+          {/* An explicit, styled placeholder rather than null: this
+              container is a flex child with a fixed share of the page,
+              and rendering nothing into it during the chunk fetch
+              collapses the layout and shifts the sidebar. */}
+          <Suspense fallback={<div className="display-page__map-loading">Loading map…</div>}>
+            <AircraftMap area={fallbackArea} aircraft={feed.aircraft} />
+          </Suspense>
         </div>
         <div className="display-page__sidebar">
           {nearest ? <AircraftCard aircraft={nearest} lastUpdatedAt={feed.lastUpdatedAt} /> : null}
