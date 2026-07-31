@@ -403,6 +403,7 @@ void pollTask(void*) {
         g_ctx->trackedEverSeen = false;
         g_ctx->trackedLastSeenAtMs = 0;
         g_ctx->trackedProgress = ofd::FlightProgress{};
+        g_ctx->trackedDeparture = ofd::DeparturePlan{};
         resolveDestination(client, http, tracked.destinationIcao);
         copyBounded(tracked.callsign, resolvedFor, sizeof(resolvedFor));
         nextTrackedAtMs = millis();
@@ -422,9 +423,12 @@ void pollTask(void*) {
       g_ctx->trackedProgress =
           ofd::computeFlightProgress(g_ctx->trackedAircraft, g_ctx->trackedDestination,
                                      g_ctx->trackedEverSeen, sinceSeen);
+      g_ctx->trackedDeparture = ofd::computeDeparturePlan(
+          g_ctx->trackedProgress, tracked.travelMinutes, tracked.postLandingMinutes);
     } else if (resolvedFor[0] != '\0') {
       resolvedFor[0] = '\0';
       g_ctx->trackedProgress = ofd::FlightProgress{};
+      g_ctx->trackedDeparture = ofd::DeparturePlan{};
       g_ctx->trackedEverSeen = false;
       g_ctx->trackedDestination = ofd::Airport{};
       g_ctx->trackedDestinationUnresolved = false;

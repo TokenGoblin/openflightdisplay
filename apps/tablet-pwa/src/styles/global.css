@@ -124,6 +124,22 @@ label {
   position: relative;
 }
 
+/* The leave-now line. Urgent state is bold and warm rather than a
+   flashing banner: this sits on a page somebody may have open for an
+   hour, and an alarm that can't be dismissed becomes an alarm that gets
+   ignored. */
+.track-panel__departure {
+  margin: 0.5rem 0;
+  font-size: 1.05rem;
+  color: var(--color-text-secondary, #94a3b8);
+}
+
+.track-panel__departure--urgent {
+  font-weight: 700;
+  font-size: 1.35rem;
+  color: var(--color-caution, #ffb020);
+}
+
 /* Placeholder while the lazily-loaded map chunk arrives. Fills the same
    box the map will occupy so the sidebar doesn't jump when it swaps in. */
 .display-page__map-loading {

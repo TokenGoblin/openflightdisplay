@@ -37,7 +37,41 @@ describe("TrackFlightPanel entry form", () => {
     await user.click(screen.getByRole("button", { name: /start tracking/i }));
 
     await waitFor(() => expect(put).toHaveBeenCalledOnce());
-    expect(put).toHaveBeenCalledWith(BASE, TOKEN, { flight: "UA1234", destinationIcao: "KSEA" });
+    expect(put).toHaveBeenCalledWith(BASE, TOKEN, {
+      flight: "UA1234",
+      destinationIcao: "KSEA",
+      travelMinutes: 0,
+      postLandingMinutes: 30,
+    });
+  });
+
+  // A blank travel time is a legitimate choice ("just watch the
+  // flight"), not a validation error -- the device suppresses the
+  // leave-now advice rather than inventing a drive.
+  it("sends travel and walk-out times when given, and zero travel when blank", async () => {
+    const put = vi.spyOn(api, "putTrackedFlight").mockResolvedValue({} as never);
+    const user = userEvent.setup();
+    render(<TrackFlightPanel core2BaseUrl={BASE} pairingToken={TOKEN} />);
+
+    await user.type(screen.getByLabelText(/flight number/i), "UA1234");
+    await user.type(screen.getByLabelText(/arrival airport/i), "KSEA");
+    await user.type(screen.getByLabelText(/travel time/i), "35");
+    await user.clear(screen.getByLabelText(/walking out/i));
+    await user.type(screen.getByLabelText(/walking out/i), "45");
+    await user.click(screen.getByRole("button", { name: /start tracking/i }));
+
+    await waitFor(() => expect(put).toHaveBeenCalledOnce());
+    expect(put).toHaveBeenCalledWith(BASE, TOKEN, {
+      flight: "UA1234",
+      destinationIcao: "KSEA",
+      travelMinutes: 35,
+      postLandingMinutes: 45,
+    });
+  });
+
+  it("warns that touchdown is not when they walk out", () => {
+    render(<TrackFlightPanel core2BaseUrl={BASE} pairingToken={TOKEN} />);
+    expect(screen.getByText(/isn.t when they walk out/i)).toBeInTheDocument();
   });
 
   it("uppercases the destination so a lowercase entry still works", async () => {
@@ -50,7 +84,11 @@ describe("TrackFlightPanel entry form", () => {
     await user.click(screen.getByRole("button", { name: /start tracking/i }));
 
     await waitFor(() => expect(put).toHaveBeenCalledOnce());
-    expect(put).toHaveBeenCalledWith(BASE, TOKEN, { flight: "ba249", destinationIcao: "EGLL" });
+    expect(put).toHaveBeenCalledWith(
+      BASE,
+      TOKEN,
+      expect.objectContaining({ flight: "ba249", destinationIcao: "EGLL" }),
+    );
   });
 
   // Caught before the request, so the user gets a specific message rather
@@ -137,6 +175,45 @@ describe("TrackFlightPanel live status", () => {
   it("never presents the estimate as a scheduled arrival time", () => {
     render(<TrackFlightPanel core2BaseUrl={BASE} pairingToken={TOKEN} status={statusFor()} />);
     expect(screen.getByText(/not a scheduled arrival time/i)).toBeInTheDocument();
+  });
+
+  it("shows how long until the user should leave", () => {
+    render(
+      <TrackFlightPanel
+        core2BaseUrl={BASE}
+        pairingToken={TOKEN}
+        status={statusFor({ departureAdvice: "LEAVE SOON", minutesUntilDeparture: 12 })}
+      />,
+    );
+    expect(screen.getByText(/leave in 12 min/i)).toBeInTheDocument();
+  });
+
+  it("says leave now without a number once the moment has passed", () => {
+    render(
+      <TrackFlightPanel
+        core2BaseUrl={BASE}
+        pairingToken={TOKEN}
+        status={statusFor({ departureAdvice: "LEAVE NOW", minutesUntilDeparture: 0 })}
+      />,
+    );
+    expect(screen.getByText(/^leave now$/i)).toBeInTheDocument();
+  });
+
+  // Signed minutes: being late has to look different from leaving now.
+  it("reports how far behind the user is when overdue", () => {
+    render(
+      <TrackFlightPanel
+        core2BaseUrl={BASE}
+        pairingToken={TOKEN}
+        status={statusFor({ departureAdvice: "RUNNING LATE", minutesUntilDeparture: -18 })}
+      />,
+    );
+    expect(screen.getByText(/18 min behind/i)).toBeInTheDocument();
+  });
+
+  it("shows no departure advice when none was configured", () => {
+    render(<TrackFlightPanel core2BaseUrl={BASE} pairingToken={TOKEN} status={statusFor()} />);
+    expect(screen.queryByText(/leave/i)).not.toBeInTheDocument();
   });
 
   it("can stop tracking", async () => {

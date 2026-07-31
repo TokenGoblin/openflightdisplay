@@ -680,11 +680,40 @@ void Display::renderTrackedFlight() {
   // The six cells answer, in reading order, the only questions that
   // matter when you're deciding whether to get in the car: when, how
   // far, where, how high, how fast, what's it doing.
-  char eta[8];
-  ofd::formatMinutesRemaining(progress.hasEta, progress.minutesRemaining, eta, sizeof(eta));
-  draw::drawCellLabel(draw::gridCell(0, 0), "ARRIVES IN");
-  draw::drawCellValueWithUnit(draw::gridCell(0, 0), eta, progress.hasEta ? "MIN" : "",
-                              progress.hasEta ? COLOR_GOOD : COLOR_TEXT_SECONDARY);
+  // The first cell answers whichever question is currently live. Until
+  // it's time to move that's "when does it land"; once the leave-now
+  // moment is close it becomes "when do *you* leave", because at that
+  // point the arrival time is no longer the actionable number.
+  //
+  // Same cell rather than an extra one: the whole design premise is
+  // reading this from across a room, and a countdown that quietly
+  // appears somewhere else on the grid is a countdown nobody notices.
+  const ofd::DeparturePlan& departure = s_ctx->trackedDeparture;
+  const bool departureIsLive = departure.hasMinutes &&
+                               departure.advice != ofd::DepartureAdvice::Wait &&
+                               departure.advice != ofd::DepartureAdvice::Unknown;
+
+  if (departureIsLive) {
+    const uint16_t adviceColor = departure.advice == ofd::DepartureAdvice::LeaveSoon
+                                     ? COLOR_CAUTION
+                                     : COLOR_CRITICAL;
+    draw::drawCellLabel(draw::gridCell(0, 0), ofd::departureAdviceWord(departure.advice));
+    if (departure.minutesUntilDeparture > 0) {
+      char inMinutes[8];
+      std::snprintf(inMinutes, sizeof(inMinutes), "%d", static_cast<int>(departure.minutesUntilDeparture));
+      draw::drawCellValueWithUnit(draw::gridCell(0, 0), inMinutes, "MIN", adviceColor);
+    } else {
+      // No number once the moment has passed -- "-12 MIN" reads as a
+      // countdown to something else entirely.
+      draw::drawCellValueWithUnit(draw::gridCell(0, 0), "GO", "", adviceColor);
+    }
+  } else {
+    char eta[8];
+    ofd::formatMinutesRemaining(progress.hasEta, progress.minutesRemaining, eta, sizeof(eta));
+    draw::drawCellLabel(draw::gridCell(0, 0), "ARRIVES IN");
+    draw::drawCellValueWithUnit(draw::gridCell(0, 0), eta, progress.hasEta ? "MIN" : "",
+                                progress.hasEta ? COLOR_GOOD : COLOR_TEXT_SECONDARY);
+  }
 
   char togo[12];
   if (progress.hasDistance) {
@@ -702,10 +731,23 @@ void Display::renderTrackedFlight() {
                                                               : tracked.destinationIcao,
                               "", COLOR_ACCENT);
 
-  draw::drawCellLabel(draw::gridCell(0, 1), "ALT");
-  draw::drawCellValueWithUnit(draw::gridCell(0, 1), vm.hasAltitude ? vm.altitudeValue : kPlaceholderDash,
-                              (vm.hasAltitude && !vm.altitudeIsGround) ? ofd::AircraftViewModel::kAltitudeUnit : "",
-                              COLOR_TEXT_PRIMARY);
+  if (departureIsLive) {
+    // The arrival time is displaced from cell 0 above but must not
+    // disappear -- it's what the departure advice is derived from, and
+    // hiding it would leave no way to sanity-check the advice. It lands
+    // here because flight level is the least useful thing on screen at
+    // the moment somebody is picking up their keys.
+    char eta[8];
+    ofd::formatMinutesRemaining(progress.hasEta, progress.minutesRemaining, eta, sizeof(eta));
+    draw::drawCellLabel(draw::gridCell(0, 1), "LANDS IN");
+    draw::drawCellValueWithUnit(draw::gridCell(0, 1), eta, progress.hasEta ? "MIN" : "",
+                                COLOR_TEXT_SECONDARY);
+  } else {
+    draw::drawCellLabel(draw::gridCell(0, 1), "ALT");
+    draw::drawCellValueWithUnit(draw::gridCell(0, 1), vm.hasAltitude ? vm.altitudeValue : kPlaceholderDash,
+                                (vm.hasAltitude && !vm.altitudeIsGround) ? ofd::AircraftViewModel::kAltitudeUnit : "",
+                                COLOR_TEXT_PRIMARY);
+  }
 
   draw::drawCellLabel(draw::gridCell(1, 1), "SPEED");
   draw::drawCellValueWithUnit(draw::gridCell(1, 1), vm.hasSpeed ? vm.speedValue : kPlaceholderDash,

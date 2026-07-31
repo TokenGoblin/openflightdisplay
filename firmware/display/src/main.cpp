@@ -226,6 +226,8 @@ uint32_t renderSignature() {
     mixU32(g_ctx.trackedProgress.hasEta ? g_ctx.trackedProgress.minutesRemaining + 1u : 0u);
     mixU32(static_cast<uint32_t>(g_ctx.trackedProgress.distanceToDestinationKm));
     mixU32(g_ctx.trackedDestinationUnresolved ? 1u : 0u);
+    mixU32(static_cast<uint32_t>(g_ctx.trackedDeparture.advice));
+    mixU32(static_cast<uint32_t>(g_ctx.trackedDeparture.minutesUntilDeparture));
   }
 
   // The SYSTEM page shows a ticking uptime, so it must keep repainting

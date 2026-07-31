@@ -168,6 +168,52 @@ FlightProgress computeFlightProgress(const AircraftState& aircraft, const Airpor
   return p;
 }
 
+// ---- when to leave ----
+
+const char* departureAdviceWord(DepartureAdvice advice) {
+  switch (advice) {
+    case DepartureAdvice::Unknown:   return "";
+    case DepartureAdvice::Wait:      return "WAIT";
+    case DepartureAdvice::LeaveSoon: return "LEAVE SOON";
+    case DepartureAdvice::LeaveNow:  return "LEAVE NOW";
+    case DepartureAdvice::Late:      return "RUNNING LATE";
+  }
+  return "";
+}
+
+DeparturePlan computeDeparturePlan(const FlightProgress& progress, uint32_t travelMinutes,
+                                   uint32_t postLandingMinutes) {
+  DeparturePlan plan;
+
+  // No configured travel time means the user never asked this question.
+  // Answering it anyway would require inventing a number.
+  if (travelMinutes == 0) return plan;
+
+  // Once it's down, the countdown to *touchdown* is over and the only
+  // thing still running is the walk-out. Treated as zero minutes of
+  // flight remaining rather than as "no ETA", so the advice stays useful
+  // through the part where somebody is actually collecting their bags.
+  const bool landed = progress.phase == FlightPhase::Landed;
+  if (!landed && !progress.hasEta) return plan;
+
+  const int32_t flightMinutes = landed ? 0 : static_cast<int32_t>(progress.minutesRemaining);
+  plan.hasMinutes = true;
+  plan.minutesUntilDeparture =
+      flightMinutes + static_cast<int32_t>(postLandingMinutes) - static_cast<int32_t>(travelMinutes);
+
+  if (plan.minutesUntilDeparture <= -kLateThresholdMinutes) {
+    plan.advice = DepartureAdvice::Late;
+  } else if (plan.minutesUntilDeparture <= 0) {
+    plan.advice = DepartureAdvice::LeaveNow;
+  } else if (plan.minutesUntilDeparture <= kLeaveSoonWindowMinutes) {
+    plan.advice = DepartureAdvice::LeaveSoon;
+  } else {
+    plan.advice = DepartureAdvice::Wait;
+  }
+
+  return plan;
+}
+
 // ---- formatting ----
 
 void formatMinutesRemaining(bool hasEta, uint32_t minutes, char* out, size_t outLen) {

@@ -591,6 +591,10 @@ void registerPairingRoutes(AsyncWebServer& server, AppContext& ctx) {
       if (ctx.trackedEverSeen) {
         tracking["secondsSinceContact"] = ctx.trackedProgress.secondsSinceContact;
       }
+      if (ctx.trackedDeparture.hasMinutes) {
+        tracking["departureAdvice"] = ofd::departureAdviceWord(ctx.trackedDeparture.advice);
+        tracking["minutesUntilDeparture"] = ctx.trackedDeparture.minutesUntilDeparture;
+      }
     }
     g_statusDoc["freeHeapBytes"] = ESP.getFreeHeap();
     char buf[512];

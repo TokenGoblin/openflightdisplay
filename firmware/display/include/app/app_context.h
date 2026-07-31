@@ -72,6 +72,10 @@ struct AppContext {
   bool trackedEverSeen = false;
   uint32_t trackedLastSeenAtMs = 0;
   ofd::FlightProgress trackedProgress;
+  // "When do I leave" -- derived from trackedProgress plus the user's
+  // travel and walk-out times. Recomputed with the progress, so the
+  // renderer never does arithmetic.
+  ofd::DeparturePlan trackedDeparture;
   // Set when the destination ICAO didn't resolve to an airport. A
   // typo'd airport is otherwise indistinguishable from a flight that
   // hasn't taken off, and only one of those is the user's mistake.

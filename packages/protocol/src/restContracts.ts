@@ -42,6 +42,14 @@ export const TrackedFlightStatusSchema = z.object({
   minutesRemaining: z.number().min(0).optional(),
   distanceToDestinationNm: z.number().min(0).optional(),
   secondsSinceContact: z.number().min(0).optional(),
+  /** Absent when no travel time is configured, or there's no ETA to work from. */
+  departureAdvice: z.enum(["WAIT", "LEAVE SOON", "LEAVE NOW", "RUNNING LATE"]).optional(),
+  /**
+   * Minutes until the user should set off. **Signed** — negative once
+   * that moment has passed. Clamping at zero would make "leave now" and
+   * "you are twenty minutes late" indistinguishable.
+   */
+  minutesUntilDeparture: z.number().int().optional(),
 });
 export type TrackedFlightStatus = z.infer<typeof TrackedFlightStatusSchema>;
 

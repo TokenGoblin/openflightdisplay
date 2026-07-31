@@ -2,7 +2,7 @@
 
 All messages — REST bodies and WebSocket frames alike — are JSON and carry an explicit `schemaVersion` (currently `1`). A breaking change to any payload shape bumps this number; the receiver must reject (not guess-parse) a `schemaVersion` it doesn't understand and surface a clear "unsupported protocol version" status rather than crashing or silently misbehaving.
 
-Canonical TypeScript definitions live in `packages/protocol/src`. Firmware's C++ structs in `firmware/display/include/domain/protocol.h` are a hand-maintained mirror — any change to one must be reflected in the other and in this document. This is the cross-language contract of record.
+Canonical TypeScript definitions live in `packages/protocol/src`. Firmware mirrors these by hand in `firmware/display/include/domain/` (`config.h`, `aircraft.h`, `flight_tracking.h`) — any change to one must be reflected in the other and in this document. This is the cross-language contract of record.
 
 ## Transport summary
 
@@ -33,11 +33,21 @@ The pairing code is generated fresh on every boot where the device is unpaired, 
   "deviceId": "core2-xxxxxx",
   "firmwareVersion": "0.1.0",
   "wifiState": "connected" | "disconnected" | "provisioning",
-  "gatewayConnectionState": "connected" | "connecting" | "disconnected" | "unconfigured",
+  "providerState": "ok" | "degraded" | "unavailable",
   "lastAircraftUpdateAgeSeconds": 4,
+  "trackedFlight": {
+    "flight": "UA1234", "callsign": "UAL1234", "destinationIcao": "KSEA",
+    "phase": "ENROUTE", "destinationResolved": true,
+    "minutesRemaining": 42, "distanceToDestinationNm": 310, "secondsSinceContact": 4,
+    "departureAdvice": "LEAVE SOON", "minutesUntilDeparture": 12
+  },
   "freeHeapBytes": 123456
 }
 ```
+
+`trackedFlight` here is **derived state, never configured** — the write side is `PUT /api/v1/config`. Every numeric field is optional because each may genuinely not exist yet: a flight that hasn't switched on its transponder has no distance, one stopped at the gate has no ETA, and no travel time configured means no departure advice.
+
+`minutesUntilDeparture` is **signed**. It goes negative once the leave-now moment has passed; clamping at zero would make "leave now" and "you are twenty minutes late" indistinguishable.
 
 `GET /api/v1/config` / `PUT /api/v1/config` (requires `Authorization: Bearer <pairingToken>`)
 ```json
@@ -46,7 +56,7 @@ The pairing code is generated fresh on every boot where the device is unpaired, 
   "deviceName": "Living Room",
   "gatewayUrl": "ws://192.168.1.50:8787/ws/v1/aircraft",
   "monitoringArea": { "kind": "circle", "centerLat": 47.6, "centerLon": -122.3, "radiusKm": 15 },
-  "trackedFlight": { "flight": "UA1234", "callsign": "UAL1234", "destinationIcao": "KSEA" },
+  "trackedFlight": { "flight": "UA1234", "callsign": "UAL1234", "destinationIcao": "KSEA", "travelMinutes": 35, "postLandingMinutes": 30 },
   "displayProfile": { "mode": "single-aircraft", "brightness": 200 }
 }
 ```
@@ -64,6 +74,8 @@ Follows one flight to its destination. **Three distinct states, and the differen
 
 - `flight` — what the user typed: a boarding-pass flight number (`"UA1234"`) or a raw ADS-B callsign (`"UAL1234"`). **The device performs the IATA→ICAO translation**, because it already carries the airline table for decoding callsigns; a second table in TypeScript would be a second source of truth that could silently disagree. Rejected with `400` if it contains no digits.
 - `callsign` — the normalized result (`"UAL1234"`), the identifier actually queried against ADS-B. Device-derived: **returned by `GET`, ignored by `PUT`.**
+- `travelMinutes` — door-to-arrivals-hall travel time. Omitted or `0` disables the leave-now advice rather than guessing.
+- `postLandingMinutes` — estimated touchdown-to-walk-out time (taxi, deplaning, immigration, bags), default 30. **Leaving this out is the obvious way to get the feature wrong**: an alert keyed to touchdown alone sends people to the airport 20–45 minutes early, which is the problem the feature exists to solve.
 - `destinationIcao` — the arrival airport, **4-letter ICAO only** (`"KSEA"`, not `"SEA"`). ADS-B carries no destination, so the user supplies it; the airport lookup that resolves it to coordinates answers `null` for IATA codes, and expanding `"SEA"` to `"KSEA"` is a North-America-only assumption. Rejected with `400` rather than guessed at.
 
 The device exposes the resulting live state (phase, ETA, distance) through `GET /api/v1/status` — it is derived, never configured.

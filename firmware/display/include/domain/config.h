@@ -19,6 +19,17 @@ struct TrackedFlightConfig {
   char callsign[12] = {0};
   char label[12] = {0};
   char destinationIcao[5] = {0};
+
+  // How long it takes the user to get to the airport, door to arrivals
+  // hall. Zero means "not configured" and disables the leave-now advice
+  // entirely rather than guessing a number.
+  uint16_t travelMinutes = 0;
+  // Their estimate of touchdown to the person actually walking out --
+  // taxi, deplaning, immigration, bags. Defaulted rather than required,
+  // because a wrong-but-stated default is easier to correct than a
+  // hidden assumption, and leaving it out would send people to the
+  // airport half an hour early. See domain/flight_tracking.h.
+  uint16_t postLandingMinutes = 30;
 };
 
 // Firmware-side mirror of the device configuration, scoped to what

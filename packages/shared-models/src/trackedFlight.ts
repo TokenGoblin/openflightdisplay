@@ -37,5 +37,21 @@ export const TrackedFlightSchema = z.object({
   destinationIcao: z
     .string()
     .regex(/^[A-Za-z]{4}$/, "destinationIcao must be a 4-letter ICAO code (e.g. KSEA, not SEA)"),
+  /**
+   * Door-to-arrivals-hall travel time, in minutes. Omitted or 0 disables
+   * the leave-now advice entirely rather than guessing a number.
+   */
+  travelMinutes: z.number().int().min(0).max(720).optional(),
+  /**
+   * Estimated minutes between touchdown and the person actually walking
+   * out — taxi, deplaning, immigration, bags.
+   *
+   * This exists because leaving it out is the obvious way to get this
+   * feature wrong: an alert keyed to touchdown alone sends people to the
+   * airport 20–45 minutes early, which is the exact problem the feature
+   * is meant to solve. Defaulted rather than required, on the grounds
+   * that a stated default is easier to correct than a hidden assumption.
+   */
+  postLandingMinutes: z.number().int().min(0).max(240).default(30),
 });
 export type TrackedFlight = z.infer<typeof TrackedFlightSchema>;

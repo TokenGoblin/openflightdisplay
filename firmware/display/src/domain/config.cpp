@@ -162,6 +162,26 @@ bool parseAndValidateDeviceConfig(const char* json, size_t len, DeviceConfig& ou
       }
       upperCopy(destination, tracked.destinationIcao, sizeof(tracked.destinationIcao));
 
+      // Bounded rather than trusted: these feed a subtraction whose
+      // result is rendered as "LEAVE NOW", and an absurd travel time
+      // would either suppress the advice forever or fire it immediately.
+      if (tf.containsKey("travelMinutes")) {
+        const int travel = tf["travelMinutes"] | 0;
+        if (travel < 0 || travel > 720) {
+          setError(errorOut, errorOutLen, "trackedFlight.travelMinutes out of range [0, 720]");
+          return false;
+        }
+        tracked.travelMinutes = static_cast<uint16_t>(travel);
+      }
+      if (tf.containsKey("postLandingMinutes")) {
+        const int postLanding = tf["postLandingMinutes"] | 0;
+        if (postLanding < 0 || postLanding > 240) {
+          setError(errorOut, errorOutLen, "trackedFlight.postLandingMinutes out of range [0, 240]");
+          return false;
+        }
+        tracked.postLandingMinutes = static_cast<uint16_t>(postLanding);
+      }
+
       parsed.trackedFlight = tracked;
       parsed.hasTrackedFlight = true;
     }
@@ -209,6 +229,8 @@ size_t serializeDeviceConfig(const DeviceConfig& config, char* buf, size_t bufLe
     tracked["flight"] = config.trackedFlight.label;
     tracked["callsign"] = config.trackedFlight.callsign;
     tracked["destinationIcao"] = config.trackedFlight.destinationIcao;
+    tracked["travelMinutes"] = config.trackedFlight.travelMinutes;
+    tracked["postLandingMinutes"] = config.trackedFlight.postLandingMinutes;
   }
 
   JsonObject display = doc.createNestedObject("displayProfile");

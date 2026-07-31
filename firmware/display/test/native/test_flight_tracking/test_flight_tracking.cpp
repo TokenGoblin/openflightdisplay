@@ -293,6 +293,77 @@ void test_missing_eta_falls_back_to_a_moderate_interval() {
   TEST_ASSERT_TRUE(interval < kMaxPollIntervalMs);
 }
 
+// ---- when to leave ----
+
+namespace {
+FlightProgress enrouteWithEta(uint32_t minutes) {
+  FlightProgress p;
+  p.phase = FlightPhase::Enroute;
+  p.hasEta = true;
+  p.minutesRemaining = minutes;
+  return p;
+}
+}  // namespace
+
+// The whole point: the aircraft landing is not the moment the person
+// appears. A 20-minute drive against a flight 90 minutes out, with a
+// 30-minute walk-out, means leaving in 100 minutes -- not 70.
+void test_departure_accounts_for_time_between_touchdown_and_arrivals_hall() {
+  const DeparturePlan plan = computeDeparturePlan(enrouteWithEta(90), 20, 30);
+  TEST_ASSERT_TRUE(plan.hasMinutes);
+  TEST_ASSERT_EQUAL_INT32(100, plan.minutesUntilDeparture);
+  TEST_ASSERT_EQUAL(static_cast<int>(DepartureAdvice::Wait), static_cast<int>(plan.advice));
+}
+
+void test_leave_now_when_departure_moment_arrives() {
+  // 40 min out + 20 min walk-out - 60 min drive = 0.
+  const DeparturePlan plan = computeDeparturePlan(enrouteWithEta(40), 60, 20);
+  TEST_ASSERT_EQUAL_INT32(0, plan.minutesUntilDeparture);
+  TEST_ASSERT_EQUAL(static_cast<int>(DepartureAdvice::LeaveNow), static_cast<int>(plan.advice));
+}
+
+void test_leave_soon_inside_the_warning_window() {
+  const DeparturePlan plan = computeDeparturePlan(enrouteWithEta(50), 60, 20);
+  TEST_ASSERT_EQUAL_INT32(10, plan.minutesUntilDeparture);
+  TEST_ASSERT_EQUAL(static_cast<int>(DepartureAdvice::LeaveSoon), static_cast<int>(plan.advice));
+}
+
+// Signed, deliberately: clamping at zero would make "leave now" and
+// "you are half an hour late" render identically.
+void test_overdue_departure_reports_negative_minutes_and_escalates_once() {
+  const DeparturePlan plan = computeDeparturePlan(enrouteWithEta(10), 60, 20);
+  TEST_ASSERT_EQUAL_INT32(-30, plan.minutesUntilDeparture);
+  TEST_ASSERT_EQUAL(static_cast<int>(DepartureAdvice::Late), static_cast<int>(plan.advice));
+}
+
+// After touchdown the flight countdown is done, but the walk-out is
+// still running -- the advice has to stay useful through it.
+void test_landed_still_advises_against_the_walkout_time() {
+  FlightProgress p;
+  p.phase = FlightPhase::Landed;
+  p.hasEta = false;  // no ETA once it's down
+  const DeparturePlan plan = computeDeparturePlan(p, 15, 30);
+  TEST_ASSERT_TRUE(plan.hasMinutes);
+  TEST_ASSERT_EQUAL_INT32(15, plan.minutesUntilDeparture);
+  TEST_ASSERT_EQUAL(static_cast<int>(DepartureAdvice::LeaveSoon), static_cast<int>(plan.advice));
+}
+
+// Without a configured travel time there is no honest answer, so the
+// feature stays silent instead of inventing one.
+void test_no_travel_time_configured_yields_no_advice() {
+  const DeparturePlan plan = computeDeparturePlan(enrouteWithEta(90), 0, 30);
+  TEST_ASSERT_FALSE(plan.hasMinutes);
+  TEST_ASSERT_EQUAL(static_cast<int>(DepartureAdvice::Unknown), static_cast<int>(plan.advice));
+}
+
+void test_no_eta_yields_no_advice() {
+  FlightProgress p;
+  p.phase = FlightPhase::AwaitingContact;
+  const DeparturePlan plan = computeDeparturePlan(p, 30, 30);
+  TEST_ASSERT_FALSE(plan.hasMinutes);
+  TEST_ASSERT_EQUAL(static_cast<int>(DepartureAdvice::Unknown), static_cast<int>(plan.advice));
+}
+
 // ---- countdown formatting ----
 
 void test_formats_minutes_under_an_hour_as_a_bare_number() {
@@ -354,6 +425,14 @@ int main(int argc, char** argv) {
   RUN_TEST(test_poll_interval_respects_bounds_in_every_phase);
   RUN_TEST(test_approaching_polls_at_the_fastest_rate);
   RUN_TEST(test_missing_eta_falls_back_to_a_moderate_interval);
+
+  RUN_TEST(test_departure_accounts_for_time_between_touchdown_and_arrivals_hall);
+  RUN_TEST(test_leave_now_when_departure_moment_arrives);
+  RUN_TEST(test_leave_soon_inside_the_warning_window);
+  RUN_TEST(test_overdue_departure_reports_negative_minutes_and_escalates_once);
+  RUN_TEST(test_landed_still_advises_against_the_walkout_time);
+  RUN_TEST(test_no_travel_time_configured_yields_no_advice);
+  RUN_TEST(test_no_eta_yields_no_advice);
 
   RUN_TEST(test_formats_minutes_under_an_hour_as_a_bare_number);
   RUN_TEST(test_formats_over_an_hour_with_padded_minutes);

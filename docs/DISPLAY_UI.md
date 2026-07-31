@@ -182,6 +182,31 @@ Height is measured against the destination's own field elevation, not sea
 level — Denver's ramp is at 5,400 ft, and a fixed altitude threshold
 would call every arrival there a landing while still airborne.
 
+### Knowing when to leave
+
+Given a travel time, the first grid cell stops showing when the aircraft
+lands and starts showing **when you should set off** — `LEAVE SOON` in
+amber, then `LEAVE NOW` in red, then `RUNNING LATE`. The arrival ETA
+moves to the ALT cell rather than disappearing, because it's what the
+advice is derived from and there'd otherwise be no way to sanity-check it.
+
+It takes over the *primary* cell deliberately. The whole premise is
+reading this from across a room; a departure countdown that quietly
+appears somewhere else on the grid is one nobody notices.
+
+**The subtraction is not "leave when it lands."** Touchdown is not when
+the person walks into arrivals — taxi, deplaning, immigration and bags
+sit in between, and on a long-haul arrival that gap is routinely longer
+than the drive. So both halves are the user's to supply: their
+door-to-arrivals travel time, and their estimate of the walk-out. Leave
+travel time blank and the advice is suppressed entirely rather than
+guessed at.
+
+This is deliberately **not** built on the stubbed `AlertRule` model. One
+subtraction with no cooldown, no channel routing and no match expression
+does not need a rule engine; building one to hold it would be
+speculative generality. General alerting remains unimplemented.
+
 ### What it does not claim
 
 There is no schedule data in ADS-B. The screen says "arrives in 24 min at

@@ -48,6 +48,26 @@ function formatEta(status: TrackedFlightStatus): string {
   return `${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, "0")}m`;
 }
 
+/**
+ * The leave-now line. Deliberately phrased as advice with its inputs
+ * visible rather than as an instruction, because it is only as good as
+ * the two numbers the user supplied.
+ */
+function departureLine(status: TrackedFlightStatus): { text: string; urgent: boolean } | null {
+  if (!status.departureAdvice || status.minutesUntilDeparture === undefined) return null;
+  const mins = status.minutesUntilDeparture;
+  switch (status.departureAdvice) {
+    case "WAIT":
+      return { text: `Leave in about ${mins} min`, urgent: false };
+    case "LEAVE SOON":
+      return { text: `Leave in ${mins} min`, urgent: true };
+    case "LEAVE NOW":
+      return { text: "Leave now", urgent: true };
+    case "RUNNING LATE":
+      return { text: `You're about ${Math.abs(mins)} min behind`, urgent: true };
+  }
+}
+
 export function TrackFlightPanel({
   core2BaseUrl,
   pairingToken,
@@ -63,6 +83,8 @@ export function TrackFlightPanel({
 }) {
   const [flight, setFlight] = useState("");
   const [destinationIcao, setDestinationIcao] = useState("");
+  const [travelMinutes, setTravelMinutes] = useState("");
+  const [postLandingMinutes, setPostLandingMinutes] = useState("30");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -76,6 +98,11 @@ export function TrackFlightPanel({
     const parsed = TrackedFlightSchema.safeParse({
       flight: flight.trim(),
       destinationIcao: destinationIcao.trim().toUpperCase(),
+      // Blank travel time is a real choice, not a validation failure: it
+      // means "just show me the flight", and the device then suppresses
+      // the leave-now advice rather than inventing a drive.
+      travelMinutes: travelMinutes.trim() === "" ? 0 : Number(travelMinutes),
+      postLandingMinutes: postLandingMinutes.trim() === "" ? 30 : Number(postLandingMinutes),
     });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Check the flight number and destination.");
@@ -111,6 +138,19 @@ export function TrackFlightPanel({
       <section aria-label="Tracked flight" className="track-panel">
         <h2 className="track-panel__heading">{status.flight}</h2>
         <p className="track-panel__phase">{phaseDescription(status)}</p>
+
+        {(() => {
+          const line = departureLine(status);
+          if (!line) return null;
+          return (
+            <p
+              className={line.urgent ? "track-panel__departure track-panel__departure--urgent" : "track-panel__departure"}
+              role={line.urgent ? "status" : undefined}
+            >
+              {line.text}
+            </p>
+          );
+        })()}
 
         <dl className="track-panel__details">
           <dt>Arrives in</dt>
@@ -172,6 +212,32 @@ export function TrackFlightPanel({
             rejection after submit. */}
         <p className="track-panel__hint">
           Four-letter ICAO code — KSEA, not SEA. EGLL for Heathrow.
+        </p>
+        <label>
+          Your travel time to the airport (minutes, optional)
+          <input
+            value={travelMinutes}
+            onChange={(e) => setTravelMinutes(e.target.value)}
+            inputMode="numeric"
+            placeholder="35"
+          />
+        </label>
+        <label>
+          Touchdown to walking out (minutes)
+          <input
+            value={postLandingMinutes}
+            onChange={(e) => setPostLandingMinutes(e.target.value)}
+            inputMode="numeric"
+            placeholder="30"
+          />
+        </label>
+        {/* Stated plainly because it is the single easiest way to get
+            this wrong: keying the alert to touchdown alone sends you to
+            the airport half an hour early. */}
+        <p className="track-panel__hint">
+          The aircraft landing isn&rsquo;t when they walk out — taxi, deplaning, immigration and bags
+          usually add 20&ndash;45 minutes. Leave travel time blank to just watch the flight without a
+          departure prompt.
         </p>
         <button type="submit" disabled={busy}>
           {busy ? "Starting…" : "Start tracking"}

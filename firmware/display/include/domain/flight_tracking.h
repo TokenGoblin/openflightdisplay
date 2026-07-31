@@ -151,6 +151,59 @@ constexpr uint32_t kMaxPollIntervalMs = 300000;
 
 uint32_t pollIntervalMsFor(const FlightProgress& progress);
 
+// ---- when to leave ----
+//
+// The question the countdown exists to answer. Kept as a derived
+// property of the tracked flight rather than an entry in a general
+// alert-rule engine (packages/shared-models' stubbed AlertRuleSchema):
+// there is exactly one of these, it has no cooldown, no channel routing
+// and no match expression, and building a rule engine to hold a single
+// subtraction would be speculative generality.
+//
+// The subtraction is not "leave when the aircraft lands". Touchdown is
+// not when the person you're collecting walks into the arrivals hall --
+// taxi, deplaning, immigration and baggage sit in between, and on a
+// long-haul arrival that gap is routinely longer than the drive. Leaving
+// it out would send people to the airport to stand around for half an
+// hour, which is precisely the failure this feature exists to prevent.
+// So both halves are the user's to supply: how long *they* take to get
+// there, and how long they expect the walk-out to take.
+
+enum class DepartureAdvice : uint8_t {
+  // No ETA yet (flight hasn't been seen, or has no usable groundspeed),
+  // or no travel time configured. Nothing honest to say.
+  Unknown,
+  Wait,
+  // Inside the warning window -- put your shoes on.
+  LeaveSoon,
+  LeaveNow,
+  // Departure time has already passed by a margin. Distinct from
+  // LeaveNow so the screen can stop escalating and just say so.
+  Late,
+};
+
+const char* departureAdviceWord(DepartureAdvice advice);
+
+struct DeparturePlan {
+  DepartureAdvice advice = DepartureAdvice::Unknown;
+  bool hasMinutes = false;
+  // Minutes until you should set off. Negative once that moment has
+  // passed, which is why it is signed -- clamping at zero would make
+  // "leave now" and "you're twenty minutes late" look identical.
+  int32_t minutesUntilDeparture = 0;
+};
+
+// How far ahead of the leave-now moment to start warning.
+constexpr int32_t kLeaveSoonWindowMinutes = 15;
+// Past this much overdue, escalating stops helping.
+constexpr int32_t kLateThresholdMinutes = 10;
+
+// `travelMinutes` is the user's door-to-arrivals-hall time; zero means
+// they haven't configured one, and the result is Unknown rather than a
+// guess. `postLandingMinutes` is their estimate of touchdown-to-walk-out.
+DeparturePlan computeDeparturePlan(const FlightProgress& progress, uint32_t travelMinutes,
+                                   uint32_t postLandingMinutes);
+
 // ---- formatting ----
 
 // Time-to-arrival as something readable at a glance from across a room:
