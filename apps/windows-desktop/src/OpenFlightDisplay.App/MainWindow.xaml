@@ -148,11 +148,27 @@
                 <Grid x:Name="BoardPage" Visibility="Collapsed">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
+                    <StackPanel
+                        Grid.Row="0"
+                        Orientation="Horizontal"
+                        Spacing="8"
+                        Padding="16,8"
+                        Background="{ThemeResource LayerFillColorDefaultBrush}">
+                        <TextBlock Text="Export:" VerticalAlignment="Center"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <Button Content="CSV" Tag="csv" Click="OnExport" />
+                        <Button Content="JSON" Tag="json" Click="OnExport" />
+                        <Button Content="GeoJSON" Tag="geojson" Click="OnExport" />
+                        <TextBlock x:Name="ExportStatus" VerticalAlignment="Center" FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+
                     <Border
-                        Grid.Row="0" Padding="16,8"
+                        Grid.Row="1" Padding="16,8"
                         Background="{ThemeResource LayerFillColorAltBrush}"
                         BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                         BorderThickness="0,0,0,1">
@@ -180,7 +196,7 @@
 
                     <!-- ListView virtualises rows, which is what makes hundreds viable. -->
                     <ListView
-                        Grid.Row="1"
+                        Grid.Row="2"
                         ItemsSource="{x:Bind ViewModel.Aircraft, Mode=OneWay}"
                         SelectedItem="{x:Bind ViewModel.SelectedAircraft, Mode=TwoWay}"
                         SelectionMode="Single">
@@ -218,6 +234,36 @@
                                 </Grid>
                             </DataTemplate>
                         </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
+
+                <!-- Alerts -->
+                <Grid x:Name="AlertsPage" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Padding="24,20,24,12" Spacing="8">
+                        <TextBlock Text="Alerts" FontSize="22" FontWeight="SemiBold" />
+                        <TextBlock
+                            x:Name="AlertsSummary"
+                            TextWrapping="Wrap"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBlock
+                            TextWrapping="Wrap" FontSize="12" MaxWidth="620"
+                            HorizontalAlignment="Left"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                            Text="One built-in rule is active: emergency squawks, with a 15 minute cooldown per aircraft. A rule editor is not built yet, so no other rules can be added." />
+                    </StackPanel>
+
+                    <ListView Grid.Row="1" x:Name="AlertsList" SelectionMode="None">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="Padding" Value="16,8" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
                     </ListView>
                 </Grid>
 

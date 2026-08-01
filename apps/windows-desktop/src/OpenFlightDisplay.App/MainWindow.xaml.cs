@@ -11,11 +11,15 @@ using OpenFlightDisplay.App.Services;
 using OpenFlightDisplay.App.ViewModels;
 using OpenFlightDisplay.Core.Alerts;
 using OpenFlightDisplay.Core.Areas;
+using OpenFlightDisplay.Core.Export;
 using OpenFlightDisplay.Core.Settings;
 using OpenFlightDisplay.Core.Units;
 using OpenFlightDisplay.Infrastructure.Settings;
 using OpenFlightDisplay.Persistence;
 using OpenFlightDisplay.Providers;
+using Windows.Storage;
+using Windows.Storage.Pickers;
+using WinRT.Interop;
 
 /// <summary>
 /// Main application window: navigation rail, radar, flight board, detail pane,
@@ -547,9 +551,15 @@ public sealed partial class MainWindow : Window, IDisposable
         RadarPage.Visibility = tag == "radar" ? Visibility.Visible : Visibility.Collapsed;
         BoardPage.Visibility = tag == "board" ? Visibility.Visible : Visibility.Collapsed;
         SourcesPage.Visibility = tag == "sources" ? Visibility.Visible : Visibility.Collapsed;
+        AlertsPage.Visibility = tag == "alerts" ? Visibility.Visible : Visibility.Collapsed;
         SettingsPage.Visibility = tag == "settings" ? Visibility.Visible : Visibility.Collapsed;
 
-        bool built = tag is "radar" or "board" or "sources" or "settings";
+        bool built = tag is "radar" or "board" or "sources" or "settings" or "alerts";
+
+        if (tag == "alerts")
+        {
+            RefreshAlerts();
+        }
         NotBuiltPage.Visibility = built ? Visibility.Collapsed : Visibility.Visible;
 
         if (built)
@@ -584,6 +594,110 @@ public sealed partial class MainWindow : Window, IDisposable
 
         NotBuiltTitle.Text = title;
         NotBuiltDetail.Text = detail;
+    }
+
+    /// <summary>
+    /// Writes the current board to a file the user chooses.
+    /// </summary>
+    /// <remarks>
+    /// Exports exactly what is on screen — the ranked, filtered list — so the
+    /// file matches what the user was looking at when they pressed the button.
+    /// </remarks>
+    private async void OnExport(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: string format })
+        {
+            return;
+        }
+
+        var aircraft = ViewModel.Aircraft.Select(r => r.Aircraft).ToList();
+        if (aircraft.Count == 0)
+        {
+            ExportStatus.Text = "Nothing to export — no aircraft on the board.";
+            return;
+        }
+
+        (string extension, string description, string content) = format switch
+        {
+            "csv" => (".csv", "Comma-separated values", AircraftExporter.ToCsv(aircraft)),
+            "geojson" => (".geojson", "GeoJSON", AircraftExporter.ToGeoJson(aircraft)),
+            _ => (".json", "JSON", AircraftExporter.ToJson(aircraft)),
+        };
+
+        try
+        {
+            var picker = new FileSavePicker
+            {
+                SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
+                SuggestedFileName = string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"openflightdisplay-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}"),
+            };
+
+            picker.FileTypeChoices.Add(description, [extension]);
+
+            // An unpackaged app has no implicit window for the picker to attach
+            // to, so the handle has to be supplied explicitly or the call hangs.
+            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(this));
+
+            StorageFile? file = await picker.PickSaveFileAsync();
+            if (file is null)
+            {
+                ExportStatus.Text = "Export cancelled.";
+                return;
+            }
+
+            await FileIO.WriteTextAsync(file, content);
+
+            ExportStatus.Text = string.Create(
+                CultureInfo.CurrentCulture,
+                $"Exported {aircraft.Count} aircraft to {file.Name}.");
+        }
+#pragma warning disable CA1031 // A failed export must not take the app down.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            ExportStatus.Text = $"Export failed: {ex.Message}";
+        }
+    }
+
+    /// <summary>Rebuilds the alerts list from the evaluator's history.</summary>
+    private void RefreshAlerts()
+    {
+        IReadOnlyList<AlertEvent> history = _feed.Alerts.History;
+
+        AlertsSummary.Text = !_settings.NotificationsEnabled
+            ? "Notifications are off. Enable them in Settings to receive alerts."
+            : history.Count == 0
+                ? "No alerts yet. Emergency squawks will appear here as they are observed."
+                : string.Create(CultureInfo.CurrentCulture, $"{history.Count} alerts this session.");
+
+        AlertsList.Items.Clear();
+
+        // Newest first: the most recent alert is the one worth reading.
+        foreach (AlertEvent e in history.Reverse())
+        {
+            var panel = new StackPanel { Spacing = 2 };
+
+            panel.Children.Add(new TextBlock
+            {
+                Text = e.Message,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                TextWrapping = TextWrapping.Wrap,
+            });
+
+            panel.Children.Add(new TextBlock
+            {
+                Text = string.Create(
+                    CultureInfo.CurrentCulture,
+                    $"{e.RuleName} · {e.FiredAt.ToLocalTime():HH:mm:ss} · {e.IcaoHex.ToUpperInvariant()}"),
+                FontSize = 12,
+                Foreground = (Microsoft.UI.Xaml.Media.Brush)
+                    Application.Current.Resources["TextFillColorSecondaryBrush"],
+            });
+
+            AlertsList.Items.Add(panel);
+        }
     }
 
     private void OnAircraftSelected(object? sender, AircraftRowViewModel row)
