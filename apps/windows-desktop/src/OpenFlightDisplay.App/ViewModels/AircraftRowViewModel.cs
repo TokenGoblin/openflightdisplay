@@ -19,13 +19,13 @@ using OpenFlightDisplay.Core.Units;
 /// rule in the project and the easiest to lose at the view layer.
 /// </para>
 /// </remarks>
-public sealed class AircraftRowViewModel
+public sealed class AircraftRowViewModel : System.ComponentModel.INotifyPropertyChanged
 {
     /// <summary>Shown wherever a provider reported nothing.</summary>
     public const string NoData = "—";
 
-    private readonly AircraftState _aircraft;
-    private readonly UnitSystem _units;
+    private AircraftState _aircraft;
+    private UnitSystem _units;
 
     public AircraftRowViewModel(AircraftState aircraft, UnitSystem units, DateTimeOffset now)
     {
@@ -36,8 +36,49 @@ public sealed class AircraftRowViewModel
         AgeSeconds = (int)Core.Quality.Staleness.Age(aircraft.PositionTimestamp, now).TotalSeconds;
     }
 
+    /// <inheritdoc/>
+    public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+
     /// <summary>Underlying record, for the detail pane and diagnostics.</summary>
     public AircraftState Aircraft => _aircraft;
+
+    /// <summary>
+    /// Points this row at a newer observation of the same aircraft.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Updating in place rather than replacing the row is what lets the list
+    /// reuse its item containers. Clearing and rebuilding the collection every
+    /// poll recreates every container, loses scroll position and selection, and
+    /// is the difference between a usable and an unusable board at the
+    /// 1,000-aircraft target.
+    /// </para>
+    /// <para>
+    /// A blanket change notification is raised rather than per-property
+    /// comparisons: nearly every displayed field derives from the position,
+    /// which changes on essentially every poll, so diffing them individually
+    /// would cost more than it saved.
+    /// </para>
+    /// </remarks>
+    public void Update(AircraftState aircraft, UnitSystem units, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(aircraft);
+
+        if (!string.Equals(aircraft.IcaoHex, _aircraft.IcaoHex, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "A row can only be updated with an observation of the same aircraft.",
+                nameof(aircraft));
+        }
+
+        _aircraft = aircraft;
+        _units = units;
+        AgeSeconds = (int)Core.Quality.Staleness.Age(aircraft.PositionTimestamp, now).TotalSeconds;
+
+        // null property name means "everything changed", which is precisely the
+        // situation here.
+        PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(null));
+    }
 
     public string IcaoHex => _aircraft.IcaoHex.ToUpperInvariant();
 
@@ -107,7 +148,7 @@ public sealed class AircraftRowViewModel
     };
 
     /// <summary>Seconds since the position was observed.</summary>
-    public int AgeSeconds { get; }
+    public int AgeSeconds { get; private set; }
 
     public string Age => string.Create(CultureInfo.CurrentCulture, $"{AgeSeconds}s");
 

@@ -225,25 +225,77 @@ public sealed partial class FlightBoardViewModel : ObservableObject
 
     private void SyncRows(IReadOnlyList<Core.Aircraft.AircraftState> aircraft, DateTimeOffset now)
     {
-        // Rebuilt wholesale for the Phase 1 slice. This is the known hot spot
-        // for the 1,000-aircraft target: it discards and recreates every row on
-        // each poll, which is fine at a dozen and will not be at a thousand.
-        // Phase 2 replaces it with a keyed diff against IcaoHex. Measured, not
-        // guessed, via the diagnostics page.
+        // Reconciled in place, keyed on IcaoHex.
         //
-        // The selection is keyed on IcaoHex and restored afterwards, because a
-        // detail pane that closed itself every poll would be unusable.
-        string? selectedHex = SelectedAircraft?.Aircraft.IcaoHex;
+        // The earlier version cleared the collection and rebuilt every row each
+        // poll. That recreates every list container, discards scroll position
+        // and selection, and does not scale to the 1,000-aircraft target. Rows
+        // that are still present are now updated rather than replaced, so the
+        // list reuses its containers and only genuine arrivals and departures
+        // move anything.
+        var existing = new Dictionary<string, AircraftRowViewModel>(
+            Aircraft.Count, StringComparer.Ordinal);
 
-        Aircraft.Clear();
-        foreach (var a in aircraft)
+        foreach (AircraftRowViewModel row in Aircraft)
         {
-            Aircraft.Add(new AircraftRowViewModel(a, Units, now));
+            // A provider returning the same hex twice in one poll would
+            // otherwise throw; the first wins and the duplicate is treated as
+            // a new row below.
+            existing.TryAdd(row.Aircraft.IcaoHex, row);
         }
 
-        SelectedAircraft = selectedHex is null
-            ? null
-            : Aircraft.FirstOrDefault(r => r.Aircraft.IcaoHex == selectedHex);
+        // The desired order is built first, reusing and updating surviving rows.
+        //
+        // Doing this in one pass over the ObservableCollection with Move() was
+        // the first attempt and was O(n^2): IndexOf inside the loop is a linear
+        // scan, so 1,000 aircraft cost a million operations per poll and pinned
+        // a core. Measured, not assumed.
+        var desired = new List<AircraftRowViewModel>(aircraft.Count);
+
+        foreach (Core.Aircraft.AircraftState state in aircraft)
+        {
+            if (existing.Remove(state.IcaoHex, out AircraftRowViewModel? row))
+            {
+                row.Update(state, Units, now);
+                desired.Add(row);
+            }
+            else
+            {
+                desired.Add(new AircraftRowViewModel(state, Units, now));
+            }
+        }
+
+        // Then reconciled positionally. Each index is an O(1) comparison and, at
+        // worst, an O(1) indexer assignment raising a single Replace. A row
+        // whose rank did not change costs no collection event at all - only the
+        // property notification its Update already raised.
+        int shared = Math.Min(Aircraft.Count, desired.Count);
+        for (int i = 0; i < shared; i++)
+        {
+            if (!ReferenceEquals(Aircraft[i], desired[i]))
+            {
+                Aircraft[i] = desired[i];
+            }
+        }
+
+        // Trim from the end so no index shifts more than once.
+        for (int i = Aircraft.Count - 1; i >= desired.Count; i--)
+        {
+            Aircraft.RemoveAt(i);
+        }
+
+        for (int i = Aircraft.Count; i < desired.Count; i++)
+        {
+            Aircraft.Add(desired[i]);
+        }
+
+        // The selected row survives as an object when the aircraft is still
+        // present, so the detail pane does not close itself every poll.
+        if (SelectedAircraft is { } selected
+            && !Aircraft.Contains(selected))
+        {
+            SelectedAircraft = null;
+        }
     }
 
     private static string HeadlineFor(FeedFailure failure) => failure switch

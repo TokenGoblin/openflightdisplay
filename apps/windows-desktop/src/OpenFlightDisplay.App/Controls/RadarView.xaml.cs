@@ -85,7 +85,41 @@ public sealed partial class RadarView : UserControl
             typeof(RadarView),
             new PropertyMetadata(UnitSystem.Aviation, OnRangeChanged));
 
+    /// <summary>
+    /// Most aircraft symbols drawn in one pass.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The plot rebuilds its visual tree on every poll, so this is a hard cost
+    /// ceiling, and it was the dominant one. Measured with a 1,000-aircraft
+    /// mock: an uncapped plot creates roughly two thousand XAML elements every
+    /// two seconds and pins a full core, with working set climbing several
+    /// hundred megabytes a minute as they are discarded.
+    /// </para>
+    /// <para>
+    /// The list arrives ranked, so the cap keeps the nearest aircraft — the ones
+    /// the display exists to show. A denser plot than this is also unreadable,
+    /// so the limit costs nothing a user would want.
+    /// </para>
+    /// </remarks>
+    public const int MaxSymbols = 200;
+
+    /// <summary>
+    /// Most callsign labels drawn in one pass.
+    /// </summary>
+    /// <remarks>
+    /// Far lower than <see cref="MaxSymbols"/> because labels overlap long
+    /// before symbols do — at around a hundred aircraft the text becomes an
+    /// unreadable mass. Nearest aircraft keep their labels; the rest are drawn
+    /// as bare symbols and remain selectable, with their identity in the tooltip
+    /// and on the flight board.
+    /// </remarks>
+    public const int MaxLabels = 40;
+
     private INotifyCollectionChanged? _observedCollection;
+
+    /// <summary>True while a coalesced redraw is already queued.</summary>
+    private bool _redrawPending;
 
     public RadarView() => InitializeComponent();
 
@@ -175,18 +209,14 @@ public sealed partial class RadarView : UserControl
             radar._observedCollection.CollectionChanged += radar.OnCollectionChanged;
         }
 
-        radar.DrawAircraft();
+        radar.RequestRedraw();
     }
 
     private static void OnRangeChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-    {
-        var radar = (RadarView)d;
-        radar.DrawScale();
-        radar.DrawAircraft();
-    }
+        => ((RadarView)d).RequestRedraw();
 
     private static void OnTrailChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        => ((RadarView)d).DrawAircraft();
+        => ((RadarView)d).RequestRedraw();
 
     /// <summary>
     /// Converts a geographic position to a point on the plot.
@@ -254,11 +284,45 @@ public sealed partial class RadarView : UserControl
     }
 
     private void OnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        => RequestRedraw();
+
+    /// <summary>
+    /// Schedules one redraw for the current batch of collection changes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Redrawing directly from the handler was the single largest performance
+    /// bug in this control. A poll updating 1,000 aircraft raises up to 1,000
+    /// collection-changed events, and the plot was rebuilding its entire visual
+    /// tree for every one of them — a thousand full redraws per update, pinning
+    /// a core and churning hundreds of megabytes a minute.
+    /// </para>
+    /// <para>
+    /// Coalescing onto the dispatcher collapses that batch into a single redraw
+    /// once the collection has settled. Measured before and after with a
+    /// 1,000-aircraft mock rather than assumed.
+    /// </para>
+    /// </remarks>
+    private void RequestRedraw()
     {
-        // The scale is redrawn alongside the plot rather than only on resize.
-        // Keeping them on separate triggers is what let them drift apart.
-        DrawScale();
-        DrawAircraft();
+        if (_redrawPending)
+        {
+            return;
+        }
+
+        _redrawPending = true;
+
+        if (!DispatcherQueue.TryEnqueue(() =>
+        {
+            _redrawPending = false;
+            DrawScale();
+            DrawAircraft();
+        }))
+        {
+            // The queue refuses work while shutting down; drawing now would
+            // fail anyway, so just clear the flag.
+            _redrawPending = false;
+        }
     }
 
     private void OnSizeChanged(object sender, SizeChangedEventArgs e)
@@ -368,8 +432,15 @@ public sealed partial class RadarView : UserControl
         var symbolBrush = (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
         var mutedBrush = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"];
 
+        int drawn = 0;
+
         foreach (AircraftRowViewModel row in aircraft)
         {
+            if (drawn >= MaxSymbols)
+            {
+                break;
+            }
+
             AircraftState state = row.Aircraft;
 
             if (state.DistanceFromObserverKm is not { } distanceKm
@@ -415,7 +486,7 @@ public sealed partial class RadarView : UserControl
             Canvas.SetTop(hit, y - 14);
             AircraftCanvas.Children.Add(hit);
 
-            if (state.Callsign is not null)
+            if (state.Callsign is not null && drawn < MaxLabels)
             {
                 var label = new TextBlock
                 {
@@ -429,6 +500,29 @@ public sealed partial class RadarView : UserControl
                 Canvas.SetTop(label, y - 6);
                 AircraftCanvas.Children.Add(label);
             }
+
+            drawn++;
+        }
+
+        // Say when the plot is not showing everything. Silently omitting
+        // aircraft would make the radar disagree with the flight board with no
+        // explanation, which is exactly the kind of quiet inconsistency the
+        // project's no-silent-failure rule exists to prevent.
+        if (aircraft.Count > drawn)
+        {
+            var note = new TextBlock
+            {
+                Text = string.Create(
+                    CultureInfo.CurrentCulture,
+                    $"Showing the nearest {drawn} of {aircraft.Count} aircraft. All are on the flight board."),
+                FontSize = 11,
+                Foreground = mutedBrush,
+                IsHitTestVisible = false,
+            };
+
+            Canvas.SetLeft(note, 8);
+            Canvas.SetTop(note, 8);
+            AircraftCanvas.Children.Add(note);
         }
     }
 

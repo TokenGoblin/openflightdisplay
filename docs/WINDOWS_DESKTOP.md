@@ -166,11 +166,40 @@ running packaged (MSIX) to see whether it reproduces; handling `WM_DPICHANGED`
 explicitly; and setting the window size through `AppWindow` rather than relying
 on the default.
 
-### Flight board rebuilds every row on each poll
+### Radar label density (mitigated)
 
-`FlightBoardViewModel.SyncRows` discards and recreates all rows per poll. Fine at
-a dozen aircraft, not at the 1,000-aircraft target. Needs a keyed diff against
-`IcaoHex`. To be measured via the diagnostics page rather than guessed at.
+At roughly a hundred aircraft the callsign labels overlapped into an unreadable
+mass — seen with a live adsb.lol feed returning 106 aircraft. The plot now draws
+at most 200 symbols and 40 labels, nearest first, and says on screen when it is
+showing a subset: silently omitting aircraft would make the radar disagree with
+the flight board with no explanation. Unlabelled symbols stay selectable and
+carry their identity in the tooltip.
+
+A user-configurable density control is still not built.
+
+### Performance at 1,000 aircraft (fixed — measured)
+
+Previously listed here as a suspected flight-board problem. Measuring it showed
+that guess was wrong twice over, which is worth recording:
+
+| Attempt | Result at 1,000 aircraft |
+|---|---|
+| Baseline (clear and rebuild rows) | 112% of one core, +285 MB / 25 s |
+| Keyed row reconcile, O(n) | 112%, +285 MB — **no change** |
+| Capping radar symbols at 200 | 112%, +285 MB — **no change** |
+| **Coalescing the radar redraw** | **18% of one core, +3 MB / 25 s** |
+
+The real cause was `RadarView` redrawing its entire visual tree from every
+`CollectionChanged` event. A poll touching 1,000 aircraft raises up to 1,000 of
+those, so the plot was rebuilding itself a thousand times per update. Coalescing
+onto the dispatcher collapses a batch into one redraw.
+
+The row reconcile and the symbol cap were kept — both are correct improvements
+and the cap also fixes label collision — but neither was the bottleneck. Memory
+is now flat over a run rather than climbing.
+
+Still to measure: sustained multi-hour operation, and behaviour across sleep and
+resume.
 
 ## Toolchain notes
 

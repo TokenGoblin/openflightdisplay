@@ -24,6 +24,12 @@
     <EnableMsixTooling>true</EnableMsixTooling>
 
     <!--
+      Program.cs replaces the generated entry point so single-instance
+      redirection can run before Application.Start. See the comments there.
+    -->
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+
+    <!--
       Unpackaged by default so `dotnet run` works during development without
       deploying an MSIX. The packaging targets override this to MSIX; see
       docs/WINDOWS_DESKTOP.md.
