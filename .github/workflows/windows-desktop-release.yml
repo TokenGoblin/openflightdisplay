@@ -1,0 +1,162 @@
+name: Windows desktop release
+
+# Builds signed MSIX packages and attaches them to a GitHub release.
+#
+# Signing is OPTIONAL. When the certificate secrets are absent the workflow
+# still produces unsigned packages and says so in the release notes, rather
+# than failing. An unsigned package cannot be installed without trusting a
+# certificate, so that limitation is stated rather than implied.
+
+on:
+  push:
+    tags:
+      - 'windows-desktop-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build, e.g. 0.2.0'
+        required: true
+        type: string
+
+env:
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+  CI: 'true'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Package ${{ matrix.platform }}
+    runs-on: windows-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: x64
+            rid: win-x64
+          - platform: ARM64
+            rid: win-arm64
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: apps/windows-desktop/global.json
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          # Tag wins over manual input; both are supported so a release can be
+          # cut without pushing a tag first.
+          if ($env:GITHUB_REF -like 'refs/tags/windows-desktop-v*') {
+            $version = $env:GITHUB_REF -replace '.*windows-desktop-v', ''
+          } else {
+            $version = '${{ inputs.version }}'
+          }
+
+          if (-not $version) {
+            throw "No version could be resolved from the tag or the workflow input."
+          }
+
+          # MSIX identity requires a four-part version and rejects anything else.
+          $parts = $version.Split('.')
+          while ($parts.Count -lt 4) { $parts += '0' }
+          $msixVersion = ($parts[0..3] -join '.')
+
+          "version=$version"          >> $env:GITHUB_OUTPUT
+          "msixVersion=$msixVersion"  >> $env:GITHUB_OUTPUT
+          Write-Host "version=$version msix=$msixVersion"
+
+      - name: Run tests
+        # A release must not be cut from a red build.
+        run: >
+          dotnet test apps/windows-desktop/OpenFlightDisplay.Desktop.sln
+          -c Release -p:Platform=x64
+
+      - name: Import signing certificate
+        id: cert
+        # The secrets context, not env: a step's own env is not available to its
+        # own if condition, so gating on it would have silently never run.
+        if: ${{ secrets.WINDOWS_CERT_BASE64 != '' }}
+        env:
+          CERT_BASE64: ${{ secrets.WINDOWS_CERT_BASE64 }}
+        shell: pwsh
+        run: |
+          # Written to the runner's temp directory, never the workspace, so it
+          # cannot be picked up by a later step that archives the checkout.
+          $pfx = Join-Path $env:RUNNER_TEMP 'signing.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CERT_BASE64))
+
+          "path=$pfx" >> $env:GITHUB_OUTPUT
+          Write-Host "Certificate imported."
+
+      - name: Publish MSIX
+        shell: pwsh
+        env:
+          CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $signing = @()
+
+          if ('${{ steps.cert.outputs.path }}') {
+            $signing = @(
+              '-p:AppxPackageSigningEnabled=true'
+              "-p:PackageCertificateKeyFile=${{ steps.cert.outputs.path }}"
+              "-p:PackageCertificatePassword=$env:CERT_PASSWORD"
+            )
+            Write-Host "Signing enabled."
+          } else {
+            $signing = @('-p:AppxPackageSigningEnabled=false')
+            Write-Warning "No certificate secret configured - producing an UNSIGNED package."
+          }
+
+          dotnet publish apps/windows-desktop/src/OpenFlightDisplay.App/OpenFlightDisplay.App.csproj `
+            -c Release `
+            -r ${{ matrix.rid }} `
+            -p:Platform=${{ matrix.platform }} `
+            -p:WindowsPackageType=MSIX `
+            -p:GenerateAppxPackageOnBuild=true `
+            -p:Version=${{ steps.version.outputs.version }} `
+            -p:AppxPackageVersion=${{ steps.version.outputs.msixVersion }} `
+            @signing
+
+      - name: Remove signing certificate
+        # Always, including on failure: a certificate must not outlive the step
+        # that needed it, even when the build broke.
+        if: ${{ always() && steps.cert.outputs.path != '' }}
+        shell: pwsh
+        run: Remove-Item '${{ steps.cert.outputs.path }}' -Force -ErrorAction SilentlyContinue
+
+      - name: Collect package
+        shell: pwsh
+        run: |
+          $out = "$env:GITHUB_WORKSPACE/artifacts"
+          New-Item -ItemType Directory -Force $out | Out-Null
+
+          $packages = Get-ChildItem `
+            "apps/windows-desktop/src/OpenFlightDisplay.App/AppPackages" `
+            -Recurse -Filter *.msix
+
+          if (-not $packages) { throw "No .msix was produced." }
+
+          $packages | ForEach-Object { Copy-Item $_.FullName $out }
+
+      - name: Upload package
+        uses: actions/upload-artifact@v7
+        with:
+          name: msix-${{ matrix.platform }}-${{ steps.version.outputs.version }}
+          path: artifacts/*.msix
+          if-no-files-found: error
+
+      - name: Attach to release
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.msix
+          fail_on_unmatched_files: true

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+
+  <!--
+    Identity Name and Publisher are placeholders for unsigned development
+    builds. A signed release must use the identity that matches its certificate
+    subject, or Windows refuses to install the package. See
+    docs/WINDOWS_DESKTOP.md for the signing procedure; no certificate is
+    committed to this repository.
+  -->
+  <Identity
+    Name="OpenFlightDisplay.Desktop"
+    Publisher="CN=OpenFlightDisplay"
+    Version="0.1.0.0" />
+
+  <Properties>
+    <DisplayName>OpenFlightDisplay Desktop</DisplayName>
+    <PublisherDisplayName>OpenFlightDisplay</PublisherDisplayName>
+    <Logo>Images\StoreLogo.png</Logo>
+    <Description>Local-first aircraft tracking display for Windows.</Description>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22621.0" />
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application Id="App"
+      Executable="$targetnametoken$.exe"
+      EntryPoint="$targetentrypoint$">
+      <uap:VisualElements
+        DisplayName="OpenFlightDisplay Desktop"
+        Description="Local-first aircraft tracking display for Windows."
+        BackgroundColor="transparent"
+        Square150x150Logo="Images\Square150x150Logo.png"
+        Square44x44Logo="Images\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Images\Wide310x150Logo.png" />
+        <uap:SplashScreen Image="Images\SplashScreen.png" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <!--
+      runFullTrust is required for a WinUI 3 desktop app.
+
+      Deliberately nothing else. The application needs outbound HTTPS to reach
+      an aviation-data provider, which a full-trust desktop app already has, and
+      it asks for no location, no microphone, no camera and no broad filesystem
+      capability. The location it uses is the one the user types in, which is
+      why no location capability appears here - see docs/SECURITY_AND_PRIVACY.md.
+    -->
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+
+</Package>

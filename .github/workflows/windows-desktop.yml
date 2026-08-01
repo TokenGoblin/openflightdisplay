@@ -1,0 +1,136 @@
+name: Windows desktop
+
+# Builds, tests and packages apps/windows-desktop.
+#
+# Path-filtered so changes to the firmware, gateway or PWA do not spend a
+# Windows runner. The workflow file itself is included, because a change to the
+# build should be validated by the build.
+
+on:
+  push:
+    branches: [main, 'feat/**']
+    paths:
+      - 'apps/windows-desktop/**'
+      - '.github/workflows/windows-desktop.yml'
+  pull_request:
+    paths:
+      - 'apps/windows-desktop/**'
+      - '.github/workflows/windows-desktop.yml'
+  workflow_dispatch:
+
+env:
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+  # Deterministic, reproducible Release output.
+  CI: 'true'
+  SOLUTION: apps/windows-desktop/OpenFlightDisplay.Desktop.sln
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build and test
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          # global.json pins the SDK feature band; this only supplies it.
+          global-json-file: apps/windows-desktop/global.json
+
+      - name: Restore
+        run: dotnet restore ${{ env.SOLUTION }}
+
+      - name: Build
+        # Platform must be explicit: the app targets x64 and ARM64 only, and the
+        # default platform is resolved before the runtime identifier, which
+        # otherwise fails the solution build with NETSDK1032.
+        run: dotnet build ${{ env.SOLUTION }} -c Release -p:Platform=x64 --no-restore
+
+      - name: Test
+        run: >
+          dotnet test ${{ env.SOLUTION }}
+          -c Release
+          --no-build
+          --logger "trx;LogFileName=test-results.trx"
+          --collect:"XPlat Code Coverage"
+          --results-directory ${{ github.workspace }}/TestResults
+
+      - name: Publish test results
+        # Runs even when tests fail, which is exactly when the report matters.
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results
+          path: ${{ github.workspace }}/TestResults
+          if-no-files-found: error
+
+  package:
+    name: Package ${{ matrix.platform }}
+    runs-on: windows-latest
+    needs: build-and-test
+
+    strategy:
+      # Both architectures are attempted even if one fails, so a break is not
+      # hidden behind whichever happened to run first.
+      fail-fast: false
+      matrix:
+        include:
+          - platform: x64
+            rid: win-x64
+          - platform: ARM64
+            rid: win-arm64
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: apps/windows-desktop/global.json
+
+      - name: Publish MSIX (unsigned)
+        # Unsigned on purpose. Signing needs a certificate, which is never
+        # committed; the release workflow signs when the secret is configured.
+        # An unsigned package cannot be installed without a trusted certificate,
+        # so these artifacts are for inspection and for signing downstream.
+        run: >
+          dotnet publish apps/windows-desktop/src/OpenFlightDisplay.App/OpenFlightDisplay.App.csproj
+          -c Release
+          -r ${{ matrix.rid }}
+          -p:Platform=${{ matrix.platform }}
+          -p:WindowsPackageType=MSIX
+          -p:GenerateAppxPackageOnBuild=true
+          -p:AppxPackageSigningEnabled=false
+
+      - name: Collect package
+        shell: pwsh
+        run: |
+          $out = "$env:GITHUB_WORKSPACE/artifacts"
+          New-Item -ItemType Directory -Force $out | Out-Null
+
+          $packages = Get-ChildItem `
+            "apps/windows-desktop/src/OpenFlightDisplay.App/AppPackages" `
+            -Recurse -Filter *.msix
+
+          if (-not $packages) {
+            throw "No .msix was produced - packaging silently did nothing."
+          }
+
+          $packages | ForEach-Object {
+            Write-Host "$($_.Name)  $([math]::Round($_.Length / 1MB, 1)) MB"
+            Copy-Item $_.FullName $out
+          }
+
+      - name: Upload package
+        uses: actions/upload-artifact@v7
+        with:
+          name: msix-${{ matrix.platform }}
+          path: artifacts/*.msix
+          if-no-files-found: error

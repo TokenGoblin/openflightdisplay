@@ -69,6 +69,30 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      Package assets ship in every configuration - they are ordinary content and
+      cost nothing in an unpackaged build.
+    -->
+    <Content Include="Images\**\*.png" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(WindowsPackageType)' != 'None'">
+    <!--
+      The manifest is included ONLY when packaging. It cannot be unconditional:
+      the MSIX targets fail the build outright with "WindowsPackageType is set to
+      None, but a AppxManifest is specified", so a manifest present in an
+      unpackaged build breaks `dotnet build` and `dotnet run`.
+
+      Packaging is driven from the command line rather than a second project:
+        dotnet publish ... -p:WindowsPackageType=MSIX -p:GenerateAppxPackageOnBuild=true
+      See docs/WINDOWS_DESKTOP.md and .github/workflows/windows-desktop.yml.
+    -->
+    <AppxManifest Include="Package.appxmanifest">
+      <SubType>Designer</SubType>
+    </AppxManifest>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\OpenFlightDisplay.Core\OpenFlightDisplay.Core.csproj" />
     <ProjectReference Include="..\OpenFlightDisplay.Infrastructure\OpenFlightDisplay.Infrastructure.csproj" />
     <ProjectReference Include="..\OpenFlightDisplay.Persistence\OpenFlightDisplay.Persistence.csproj" />

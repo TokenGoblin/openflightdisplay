@@ -37,7 +37,7 @@ Lives at `apps/windows-desktop/`. Architecture and the reasoning behind it:
 | Monitoring-area editor | Not built (Phase 2). Domain supports circle/cone/polygon |
 | Devices | Not built (Phase 3) |
 | Diagnostics | Not built (Phase 4) |
-| MSIX packaging / CI | Not built (Phase 4) — proven possible, not wired up |
+| MSIX packaging / CI | **Built.** See "Packaging" below |
 
 `adsb.lol` and replay adapters are implemented and tested but cannot be selected
 from the UI until the data-source picker lands.
@@ -62,6 +62,69 @@ dotnet build apps/windows-desktop/src/OpenFlightDisplay.App/OpenFlightDisplay.Ap
 
 `-p:Platform=x64` is required for solution-level builds: the app targets x64 and
 ARM64 only, and the default platform is resolved before the runtime identifier.
+
+## Packaging
+
+Both architectures package locally with no Visual Studio installed:
+
+```powershell
+dotnet publish apps/windows-desktop/src/OpenFlightDisplay.App/OpenFlightDisplay.App.csproj `
+  -c Release -r win-x64 -p:Platform=x64 `
+  -p:WindowsPackageType=MSIX -p:GenerateAppxPackageOnBuild=true `
+  -p:AppxPackageSigningEnabled=false
+```
+
+Swap `win-arm64` / `ARM64` for the other target. Output lands in
+`src/OpenFlightDisplay.App/AppPackages/`. Verified sizes: **88.8 MB (x64)** and
+**86.3 MB (ARM64)**, self-contained including the Windows App SDK runtime.
+
+### Sideloading
+
+An **unsigned package cannot be installed**. Windows requires the signing
+certificate to be trusted on the target machine, so the CI artifacts are for
+inspection and for signing downstream, not for direct installation. To install
+locally you need a certificate whose subject matches the `Identity/@Publisher`
+in `Package.appxmanifest` (`CN=OpenFlightDisplay` by default):
+
+```powershell
+# Create a self-signed certificate for local testing only.
+$cert = New-SelfSignedCertificate -Type Custom -Subject "CN=OpenFlightDisplay" `
+  -KeyUsage DigitalSignature -FriendlyName "OFD dev" `
+  -CertStoreLocation "Cert:\CurrentUser\My" `
+  -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
+
+# Trust it, then sign and install the package. Trusting a self-signed
+# certificate is a real change to the machine's trust store - do it knowingly,
+# and remove the certificate when finished testing.
+```
+
+Then build with `-p:AppxPackageSigningEnabled=true` and
+`-p:PackageCertificateThumbprint=<thumbprint>`.
+
+**No certificate, thumbprint or password is committed to this repository**, and
+`.gitignore` excludes `*.pfx`, `*.snk`, `*.cer` and `*.p12`.
+
+### CI
+
+`.github/workflows/windows-desktop.yml` runs on `windows-latest`, path-filtered
+to `apps/windows-desktop/**`: restore, build, test with a `.trx` logger and
+coverage collection, publish test results as an artifact, then package x64 and
+ARM64 in a matrix and upload each `.msix`. The packaging step fails loudly if no
+package was produced, rather than uploading an empty artifact.
+
+`.github/workflows/windows-desktop-release.yml` runs on a
+`windows-desktop-v*` tag or manual dispatch. Signing is **optional**: with
+`WINDOWS_CERT_BASE64` and `WINDOWS_CERT_PASSWORD` configured it signs, and
+without them it still produces unsigned packages and warns. The certificate is
+written to the runner's temp directory rather than the workspace, and removed in
+an `always()` step so it cannot outlive a failed build.
+
+> **Not yet verified by an actual run.** Both workflows are valid YAML and the
+> `dotnet` commands in them are the ones proven locally, but no GitHub Actions
+> run has executed them. In particular the pinned action versions
+> (`checkout@v7`, `setup-dotnet@v5`, `upload-artifact@v7`) have not been
+> resolved against the registry from here. Expect the first run to need
+> adjustment.
 
 ## Known defects
 
