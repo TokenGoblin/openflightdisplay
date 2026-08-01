@@ -13,4 +13,13 @@
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!--
+      EscapeCsvField is an implementation detail, but its formula-injection
+      neutralisation is worth testing directly rather than only through a full
+      CSV render.
+    -->
+    <InternalsVisibleTo Include="OpenFlightDisplay.Core.Tests" />
+  </ItemGroup>
+
 </Project>
