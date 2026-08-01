@@ -507,6 +507,34 @@ public class FlightTrackingTests
         return null;
     }
 
+    [Theory]
+    [InlineData("KSEA", "KSEA")]
+    [InlineData("ksea", "KSEA")]
+    [InlineData("  EGLL  ", "EGLL")]
+    [InlineData("yssy", "YSSY")]
+    public void An_airport_code_of_four_letters_is_accepted_and_uppercased(
+        string input,
+        string expected)
+        => Assert.Equal(expected, FlightTracking.NormalizeAirportIcao(input));
+
+    [Theory]
+    [InlineData("SEA")]      // IATA, and there is no safe expansion to KSEA
+    [InlineData("LHR")]
+    [InlineData("KSEAX")]
+    [InlineData("K1SE")]     // digits are not ICAO airport codes
+    [InlineData("KSE-")]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null)]
+    public void Anything_that_is_not_four_letters_is_rejected(string? input)
+    {
+        // IATA in particular is rejected rather than guessed at: the K prefix is
+        // North America only, so expanding SEA to KSEA works exactly until
+        // somebody tracks a flight to LHR. Failing loudly beats tracking a
+        // flight to nowhere.
+        Assert.Null(FlightTracking.NormalizeAirportIcao(input));
+    }
+
     private static FlightProgress Progress(AircraftState aircraft)
         => FlightTracking.ComputeProgress(aircraft, Seatac, everSeen: true, secondsSinceContact: 5);
 

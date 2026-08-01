@@ -237,6 +237,140 @@
                     </ListView>
                 </Grid>
 
+                <!-- Track Flight -->
+                <ScrollViewer x:Name="TrackPage" Visibility="Collapsed">
+                    <StackPanel Padding="24" Spacing="16" MaxWidth="680" HorizontalAlignment="Left">
+                        <TextBlock Text="Track Flight" FontSize="22" FontWeight="SemiBold" />
+                        <TextBlock
+                            TextWrapping="Wrap"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="Follow one flight to its destination and be told when to leave to collect someone. Polling speeds up as the flight gets closer and stays slow while it is hours away." />
+
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <TextBox
+                                x:Name="TrackCallsignBox"
+                                Header="Flight number or callsign"
+                                PlaceholderText="UA1234"
+                                Width="200" />
+                            <TextBox
+                                x:Name="TrackDestinationBox"
+                                Header="Destination (ICAO)"
+                                PlaceholderText="KSEA"
+                                MaxLength="4"
+                                Width="160" />
+                        </StackPanel>
+
+                        <TextBlock
+                            FontSize="12" TextWrapping="Wrap"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                            Text="UA1234, ua 1234 and UA-1234 all resolve to the ICAO callsign UAL1234. The destination must be the four-letter ICAO code (KSEA), not the three-letter IATA one (SEA)." />
+
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <TextBox
+                                x:Name="TrackTravelBox"
+                                Header="Your travel time (minutes)"
+                                PlaceholderText="45"
+                                Width="200" />
+                            <TextBox
+                                x:Name="TrackWalkOutBox"
+                                Header="Landing to walk-out (minutes)"
+                                PlaceholderText="20"
+                                Width="220" />
+                        </StackPanel>
+
+                        <TextBlock
+                            FontSize="12" TextWrapping="Wrap"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                            Text="Walk-out covers taxi, deplaning, immigration and bags. It matters: on a long-haul arrival that gap is routinely longer than the drive, and leaving it out sends you to the airport half an hour early." />
+
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <Button x:Name="TrackStartButton" Content="Start tracking"
+                                    Style="{StaticResource AccentButtonStyle}" Click="OnStartTracking" />
+                            <Button x:Name="TrackStopButton" Content="Stop" Click="OnStopTracking" />
+                        </StackPanel>
+
+                        <InfoBar
+                            x:Name="TrackError"
+                            IsOpen="False"
+                            IsClosable="False"
+                            Severity="Error" />
+
+                        <!-- Live state -->
+                        <Border
+                            x:Name="TrackStatusCard"
+                            Visibility="Collapsed"
+                            Background="{ThemeResource LayerFillColorAltBrush}"
+                            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="20">
+                            <StackPanel Spacing="12">
+                                <TextBlock x:Name="TrackFlightLabel" FontSize="18" FontWeight="SemiBold" />
+
+                                <StackPanel Orientation="Horizontal" Spacing="32">
+                                    <StackPanel Spacing="2">
+                                        <TextBlock Text="STATUS" FontSize="11"
+                                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                                        <TextBlock x:Name="TrackPhase" FontSize="26" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                    <StackPanel Spacing="2">
+                                        <TextBlock Text="ETA (MIN)" FontSize="11"
+                                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                                        <TextBlock x:Name="TrackEta" FontSize="26" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                    <StackPanel Spacing="2">
+                                        <TextBlock Text="DISTANCE" FontSize="11"
+                                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                                        <TextBlock x:Name="TrackDistance" FontSize="26" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <Border
+                                    x:Name="TrackAdviceCard"
+                                    Visibility="Collapsed"
+                                    Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                    CornerRadius="6"
+                                    Padding="14,10">
+                                    <StackPanel Spacing="2">
+                                        <TextBlock x:Name="TrackAdvice" FontSize="20" FontWeight="SemiBold" />
+                                        <TextBlock
+                                            x:Name="TrackAdviceDetail"
+                                            FontSize="12" TextWrapping="Wrap"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    </StackPanel>
+                                </Border>
+
+                                <TextBlock
+                                    x:Name="TrackDestinationLabel"
+                                    FontSize="12" TextWrapping="Wrap"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                                <TextBlock
+                                    x:Name="TrackContactLabel"
+                                    FontSize="12" TextWrapping="Wrap"
+                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                            </StackPanel>
+                        </Border>
+
+                        <InfoBar
+                            x:Name="TrackDestinationIssue"
+                            IsOpen="False"
+                            IsClosable="False"
+                            Severity="Warning" />
+
+                        <InfoBar
+                            x:Name="TrackFeedIssue"
+                            IsOpen="False"
+                            IsClosable="False"
+                            Severity="Informational" />
+
+                        <TextBlock
+                            FontSize="12" TextWrapping="Wrap"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                            Text="Tracking uses adsb.lol regardless of the data source selected for the radar, because it is the only configured source with a callsign lookup. ETA is a straight-line projection from the current groundspeed — it is not a schedule, and it knows nothing about routing, holding or taxi time." />
+                    </StackPanel>
+                </ScrollViewer>
+
                 <!-- Alerts -->
                 <Grid x:Name="AlertsPage" Visibility="Collapsed">
                     <Grid.RowDefinitions>

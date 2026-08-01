@@ -166,6 +166,78 @@ public class AdsbLolProviderTests
         }
     }
 
+    [Fact]
+    public async Task A_callsign_lookup_returns_the_matching_aircraft()
+    {
+        var handler = new StubHandler(HttpStatusCode.OK, """
+            { "ac": [ { "hex": "a1b2c3", "flight": "UAL1234 ", "lat": 47.61, "lon": -122.33 } ] }
+            """);
+
+        var result = await Provider(handler).FetchByCallsignAsync("UAL1234", CancellationToken.None);
+
+        var success = Assert.IsType<ProviderResult.Success>(result);
+        var aircraft = Assert.Single(success.Aircraft);
+
+        // The feed space-pads callsigns to eight characters; the reader trims.
+        Assert.Equal("UAL1234", aircraft.Callsign);
+        Assert.EndsWith("/v2/callsign/UAL1234", handler.LastRequestUri!.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_non_matching_row_is_rejected_rather_than_shown_as_the_tracked_flight()
+    {
+        // The endpoint matches on callsign, but trusting the first row would let
+        // a mismatch put a stranger's aircraft on a screen somebody is using to
+        // decide when to leave for the airport. "Not currently seen" is honest;
+        // the wrong aeroplane is not.
+        var handler = new StubHandler(HttpStatusCode.OK, """
+            { "ac": [ { "hex": "d4e5f6", "flight": "DAL9999 ", "lat": 40.0, "lon": -74.0 } ] }
+            """);
+
+        var result = await Provider(handler).FetchByCallsignAsync("UAL1234", CancellationToken.None);
+
+        var success = Assert.IsType<ProviderResult.Success>(result);
+        Assert.Empty(success.Aircraft);
+    }
+
+    [Fact]
+    public async Task Only_the_matching_row_is_returned_when_several_come_back()
+    {
+        var handler = new StubHandler(HttpStatusCode.OK, """
+            { "ac": [
+                { "hex": "d4e5f6", "flight": "DAL9999 ", "lat": 40.0, "lon": -74.0 },
+                { "hex": "a1b2c3", "flight": "UAL1234 ", "lat": 47.61, "lon": -122.33 }
+            ] }
+            """);
+
+        var result = await Provider(handler).FetchByCallsignAsync("UAL1234", CancellationToken.None);
+
+        var success = Assert.IsType<ProviderResult.Success>(result);
+        Assert.Equal("UAL1234", Assert.Single(success.Aircraft).Callsign);
+    }
+
+    [Fact]
+    public async Task A_flight_not_currently_reported_is_an_empty_success_not_a_failure()
+    {
+        // Normal before pushback and inside a coverage gap. Reporting it as a
+        // provider failure would make an ordinary state look like an outage.
+        var result = await Provider(HttpStatusCode.OK, """{ "ac": [] }""")
+            .FetchByCallsignAsync("UAL1234", CancellationToken.None);
+
+        var success = Assert.IsType<ProviderResult.Success>(result);
+        Assert.Empty(success.Aircraft);
+    }
+
+    [Fact]
+    public async Task A_callsign_lookup_classifies_http_failures()
+    {
+        var result = await Provider(HttpStatusCode.TooManyRequests, "")
+            .FetchByCallsignAsync("UAL1234", CancellationToken.None);
+
+        var failure = Assert.IsType<ProviderResult.Failure>(result);
+        Assert.Equal(FeedFailure.RateLimited, failure.Kind);
+    }
+
     private static AdsbLolProvider Provider(HttpStatusCode status, string body)
         => Provider(new StubHandler(status, body));
 

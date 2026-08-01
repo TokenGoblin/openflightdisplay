@@ -480,6 +480,54 @@ public static class FlightTracking
     }
 
     /// <summary>
+    /// Normalizes what a human types into a destination ICAO code.
+    /// </summary>
+    /// <returns>
+    /// The uppercased four-letter code, or <c>null</c> if the input is not one.
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// Exactly four letters — <c>KSEA</c>, <c>EGLL</c>, <c>YSSY</c>. Ported from
+    /// <c>isIcaoAirportCode</c> in <c>firmware/display/src/domain/config.cpp</c>.
+    /// </para>
+    /// <para>
+    /// <b>Three-letter IATA codes are rejected, not expanded.</b> The airport
+    /// endpoint this feeds answers <c>null</c> for IATA, and there is no safe way
+    /// to turn <c>SEA</c> into <c>KSEA</c> without a lookup table — the <c>K</c>
+    /// prefix is North America only. Rejecting with a clear reason beats silently
+    /// tracking a flight to nowhere, which is the failure that matters when
+    /// somebody is deciding when to leave for the airport.
+    /// </para>
+    /// </remarks>
+    public static string? NormalizeAirportIcao(string? input)
+    {
+        if (input is null)
+        {
+            return null;
+        }
+
+        ReadOnlySpan<char> trimmed = input.AsSpan().Trim();
+
+        if (trimmed.Length != 4)
+        {
+            return null;
+        }
+
+        Span<char> code = stackalloc char[4];
+        for (int i = 0; i < 4; i++)
+        {
+            if (!char.IsAsciiLetter(trimmed[i]))
+            {
+                return null;
+            }
+
+            code[i] = char.ToUpperInvariant(trimmed[i]);
+        }
+
+        return new string(code);
+    }
+
+    /// <summary>
     /// Time to arrival, readable at a glance from across a room.
     /// </summary>
     /// <remarks>

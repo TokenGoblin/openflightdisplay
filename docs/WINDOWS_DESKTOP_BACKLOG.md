@@ -10,7 +10,7 @@ marked as unverified — nothing here is aspirational.
 
 | | |
 |---|---|
-| Tests | **287 passing**, 0 warnings under warnings-as-errors |
+| Tests | **332 passing**, 0 warnings under warnings-as-errors |
 | Build | Clean `dotnet build -c Release -p:Platform=x64` |
 | Packaging | MSIX verified locally: 88.8 MB x64, 86.3 MB ARM64 |
 | App | Launches, polls, renders. No Node.js involved |
@@ -22,7 +22,8 @@ pass (104 firmware native + 113 TypeScript).
 
 Onboarding → data source (mock / adsb.lol live / local receiver / replay) →
 radar with trails → flight board with detail pane → history to SQLite → alerts
-with Windows toasts → CSV/JSON/GeoJSON export.
+with Windows toasts → CSV/JSON/GeoJSON export → **follow a flight to its
+destination with ETA and departure advice**.
 
 Verified against real data, not only fixtures: adsb.lol returned 106 live
 aircraft; the history database was inspected after a run and had 228
@@ -76,18 +77,26 @@ infrastructure are well covered; the WinUI layer is not covered at all.
 
 ## Backlog, roughly in value order
 
-### Phase 3 — finish flight tracking
+### Phase 3 — flight tracking — DONE
 
-The **domain is ported and tested** (62 tests, thresholds matching the firmware
-exactly). **Nothing in the app calls it.** Needed:
+Built and verified against live data on 2026-08-01. Tracking `RYR89ZN` to
+`EGLL` reported ENROUTE, 14 min ETA, 107 NM, field elevation 83 ft, and
+"RUNNING LATE — about 11 minutes past the ideal departure time"
+(14 + 20 − 45 = −11, past the −10 threshold).
 
-- A Track Flight page: enter callsign / flight number, destination ICAO, travel
-  minutes, walk-out minutes
-- A callsign-lookup poller using `adsb.lol /v2/callsign/{callsign}` on the
-  adaptive cadence `FlightTracking.PollIntervalFor` already computes
-- An airport lookup resolving `KSEA` to coordinates **and field elevation** —
-  elevation is load-bearing, landing is judged against it
-- Wire `DepartureAdvice` into a toast so "leave now" actually reaches the user
+- `AirportLookup` → `/api/0/airport/{icao}`, returning coordinates and
+  `alt_feet`. Confirmed live: **the endpoint answers HTTP 200 with a literal
+  `null`** for unknown codes *and* for any IATA code, so "parsed" is not "found"
+- `AdsbLolProvider.FetchByCallsignAsync` → `/v2/callsign/{callsign}`. Confirmed
+  live: a callsign with no active flight is HTTP 200 with `ac: []`, not a 404,
+  so "not flying" is an empty success rather than a failure
+- `FlightTrackingService` (Infrastructure) drives the adaptive cadence
+- Track Flight page, with the tracked flight persisted and resumed on launch
+- `DepartureAdvice` raises a toast on **change**, at LeaveSoon and LeaveNow only
+
+Still untested: the toast itself has not been observed firing, because
+notifications are opt-in and were off. The code path is the same
+`ToastAlertNotifier` the emergency-squawk alert already uses.
 
 Reference: `docs/DISPLAY_UI.md` for how the firmware presents this.
 
@@ -166,6 +175,17 @@ matter, but they are easy to "tidy" away:
 8. **Nullable means "not reported", never zero.** Enforced from the model
    through the database to CSV and GeoJSON, with tests in both directions. It is
    the single most load-bearing rule in this codebase.
+9. **The airport lookup must keep "not found" separate from "lookup failed".**
+   The endpoint returns HTTP 200 with a literal `null` for a code it does not
+   know, so a successful parse is not a successful lookup. Collapsing the two
+   tells somebody their correct ICAO code is wrong when the network is down —
+   and defaulting a missing `alt_feet` to zero would judge Denver's arrivals
+   against sea level and never report a landing.
+10. **The callsign match is confirmed, not assumed.** `/v2/callsign/` matches on
+    callsign, but the row is checked before use. A mismatch would put a
+    stranger's aircraft on a screen someone uses to decide when to leave.
+11. **Departure advice fires on change, never per poll.** A ten-second toast
+    cadence through an approach trains the user to dismiss the one that matters.
 
 ---
 

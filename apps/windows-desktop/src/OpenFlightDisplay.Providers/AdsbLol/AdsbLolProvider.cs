@@ -127,6 +127,109 @@ public sealed partial class AdsbLolProvider : IAviationDataProvider
     }
 
     /// <summary>
+    /// Fetches a single aircraft by callsign.
+    /// </summary>
+    /// <param name="callsign">
+    /// Already normalized to the ICAO form ADS-B broadcasts — see
+    /// <see cref="OpenFlightDisplay.Core.Tracking.FlightTracking.NormalizeFlightIdentifier"/>.
+    /// </param>
+    /// <returns>
+    /// A success carrying at most one aircraft. An empty list means the flight
+    /// is not currently being reported, which is the normal state before
+    /// pushback and inside a coverage gap — <b>not</b> a failure.
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// This is the efficiency argument for the whole tracking feature. The
+    /// geographic query returns every aircraft in the radius — dozens near a
+    /// busy airport — and discards all but one, while this returns exactly the
+    /// flight being followed.
+    /// </para>
+    /// <para>
+    /// Ported from <c>pollTrackedFlight</c> in
+    /// <c>firmware/display/src/app/adsb_provider.cpp</c>.
+    /// </para>
+    /// </remarks>
+    public async Task<ProviderResult> FetchByCallsignAsync(
+        string callsign,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(callsign);
+
+        string wanted = callsign.Trim().ToUpperInvariant();
+
+        try
+        {
+            using HttpResponseMessage response = await _httpClient
+                .GetAsync($"/v2/callsign/{Uri.EscapeDataString(wanted)}", cancellationToken)
+                .ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return new ProviderResult.Failure(
+                    ClassifyStatus(response.StatusCode),
+                    $"adsb.lol returned HTTP {(int)response.StatusCode} for {wanted}");
+            }
+
+            string body = await response.Content
+                .ReadAsStringAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            DateTimeOffset observedAt = DateTimeOffset.UtcNow;
+            var aircraft = AdsbLolNormalizer.ParseResponse(body, Id, observedAt);
+
+            // The endpoint matches on callsign, but the match is confirmed here
+            // rather than trusting the first row. A mismatch would silently show
+            // somebody a different aircraft's position, and this is a screen
+            // people make travel decisions from. Rejecting is always the safe
+            // direction: the flight then reads as "not currently reported",
+            // which is honest, rather than as somebody else's aeroplane.
+            var matched = aircraft
+                .Where(a => string.Equals(a.Callsign, wanted, StringComparison.OrdinalIgnoreCase))
+                .Take(1)
+                .ToList();
+
+            if (matched.Count == 0 && aircraft.Count > 0)
+            {
+                LogCallsignMismatch(_logger, wanted, aircraft.Count);
+            }
+
+            return new ProviderResult.Success(matched, observedAt);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException ex)
+        {
+            return new ProviderResult.Failure(
+                FeedFailure.Timeout, $"adsb.lol did not respond in time for {wanted}", ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            FeedFailure kind = ex.InnerException is System.Net.Sockets.SocketException
+                ? FeedFailure.NetworkUnavailable
+                : FeedFailure.ProviderUnavailable;
+
+            return new ProviderResult.Failure(
+                kind, $"callsign lookup for {wanted} failed: {ex.Message}", ex);
+        }
+        catch (JsonException ex)
+        {
+            return new ProviderResult.Failure(
+                FeedFailure.InvalidResponse, $"adsb.lol returned invalid JSON for {wanted}", ex);
+        }
+    }
+
+    [LoggerMessage(
+        EventId = 1001,
+        Level = LogLevel.Warning,
+        Message = "Callsign lookup for {Callsign} returned {Count} aircraft, none matching; "
+            + "reporting the flight as not currently seen rather than showing the wrong one")]
+    private static partial void LogCallsignMismatch(
+        ILogger logger, string callsign, int count);
+
+    /// <summary>
     /// Source-generated log method.
     /// </summary>
     /// <remarks>

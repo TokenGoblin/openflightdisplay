@@ -17,6 +17,14 @@
 
   <ItemGroup>
     <ProjectReference Include="..\OpenFlightDisplay.Core\OpenFlightDisplay.Core.csproj" />
+
+    <!--
+      FlightTrackingService drives the two adsb.lol lookups following a flight
+      needs, so this layer owns the polling loop while staying plain net10.0 and
+      testable on any runner. AircraftFeedService is noted in its own comments as
+      belonging here for the same reason and moves next.
+    -->
+    <ProjectReference Include="..\OpenFlightDisplay.Providers\OpenFlightDisplay.Providers.csproj" />
   </ItemGroup>
 
 </Project>

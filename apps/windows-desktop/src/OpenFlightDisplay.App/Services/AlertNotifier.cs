@@ -83,6 +83,24 @@ public sealed partial class ToastAlertNotifier : IAlertNotifier, IDisposable
             return;
         }
 
+        Show(alertEvent.RuleName, alertEvent.Message);
+    }
+
+    /// <summary>
+    /// Shows a toast that is not an alert-rule event.
+    /// </summary>
+    /// <remarks>
+    /// Used by flight tracking, whose departure advice is a countdown rather
+    /// than a rule firing on an aircraft, so it has no
+    /// <see cref="AlertEvent"/> to carry.
+    /// </remarks>
+    public void Show(string title, string message)
+    {
+        if (!_registered)
+        {
+            return;
+        }
+
         try
         {
             // Values are escaped because callsigns come from a provider and are
@@ -90,8 +108,8 @@ public sealed partial class ToastAlertNotifier : IAlertNotifier, IDisposable
             // in a callsign would produce a malformed notification that silently
             // fails to appear.
             AppNotification notification = new AppNotificationBuilder()
-                .AddText(WebUtility.HtmlEncode(alertEvent.RuleName))
-                .AddText(WebUtility.HtmlEncode(alertEvent.Message))
+                .AddText(WebUtility.HtmlEncode(title))
+                .AddText(WebUtility.HtmlEncode(message))
                 .BuildNotification();
 
             AppNotificationManager.Default.Show(notification);

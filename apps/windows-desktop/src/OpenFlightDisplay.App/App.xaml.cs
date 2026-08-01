@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml;
 using OpenFlightDisplay.App.Services;
 using OpenFlightDisplay.App.ViewModels;
 using OpenFlightDisplay.Infrastructure.Settings;
+using OpenFlightDisplay.Infrastructure.Tracking;
 using OpenFlightDisplay.Providers.AdsbLol;
 using OpenFlightDisplay.Providers.Mock;
 
@@ -52,7 +53,26 @@ public partial class App : Application
             client.DefaultRequestHeaders.UserAgent.ParseAdd("OpenFlightDisplay-Desktop/0.1");
         });
 
+        // The airport lookup shares adsb.lol's base address and courtesy
+        // user-agent, but not its 8 second timeout — resolving a destination
+        // happens once per flight and can afford to be patient.
+        services.AddHttpClient<AirportLookup>(client =>
+        {
+            client.BaseAddress = new Uri("https://api.adsb.lol");
+            client.Timeout = TimeSpan.FromSeconds(15);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("OpenFlightDisplay-Desktop/0.1");
+        });
+
         services.AddSingleton<MockProvider>(_ => new MockProvider());
+
+        // Flight tracking always goes to adsb.lol, whatever the radar is using:
+        // it is the only configured source with a callsign lookup, and the page
+        // says so rather than silently doing something else.
+        services.AddSingleton<ITrackedFlightGateway>(sp => new AdsbLolTrackedFlightGateway(
+            sp.GetRequiredService<AdsbLolProvider>(),
+            sp.GetRequiredService<AirportLookup>()));
+
+        services.AddSingleton<FlightTrackingService>();
 
         // The active provider is chosen at runtime from persisted settings via
         // ProviderRegistry, not bound here — switching data source must not

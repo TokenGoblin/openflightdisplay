@@ -115,6 +115,37 @@ public sealed record AppSettings
     /// <summary>Windows toast notifications for alerts. Opt-in.</summary>
     public bool NotificationsEnabled { get; init; }
 
+    // ---- tracked flight ----
+
+    /// <summary>
+    /// Flight being followed, in the callsign form ADS-B broadcasts, or
+    /// <c>null</c> when nothing is tracked.
+    /// </summary>
+    public string? TrackedCallsign { get; init; }
+
+    /// <summary>Destination ICAO code, or <c>null</c>. Four letters, never IATA.</summary>
+    public string? TrackedDestinationIcao { get; init; }
+
+    /// <summary>
+    /// Door-to-arrivals-hall travel time in minutes.
+    /// </summary>
+    /// <remarks>
+    /// Zero means never configured, which produces no departure advice rather
+    /// than a guess — the domain treats it that way deliberately.
+    /// </remarks>
+    public int TrackedTravelMinutes { get; init; }
+
+    /// <summary>
+    /// Estimated touchdown-to-walk-out time: taxi, deplaning, immigration, bags.
+    /// </summary>
+    /// <remarks>
+    /// Defaulted to something plausible rather than zero, because omitting it
+    /// entirely sends people to the airport to stand around — the exact failure
+    /// the feature exists to prevent. Twenty minutes suits a domestic arrival
+    /// with hand baggage; long-haul with a checked bag is closer to forty-five.
+    /// </remarks>
+    public int TrackedPostLandingMinutes { get; init; } = 20;
+
     /// <summary>Keep polling when the window is minimised to the tray. Opt-in.</summary>
     public bool BackgroundMonitoringEnabled { get; init; }
 
