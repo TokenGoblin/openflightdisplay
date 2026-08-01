@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml.Controls;
 using OpenFlightDisplay.App.Dialogs;
 using OpenFlightDisplay.App.Services;
 using OpenFlightDisplay.App.ViewModels;
+using OpenFlightDisplay.Core.Alerts;
 using OpenFlightDisplay.Core.Areas;
 using OpenFlightDisplay.Core.Settings;
 using OpenFlightDisplay.Core.Units;
@@ -36,6 +37,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private AppSettings _settings = new();
     private HistoryStore? _historyStore;
     private HistoryObservationRecorder? _recorder;
+    private ToastAlertNotifier? _notifier;
 
     /// <summary>History database location, beside the settings file.</summary>
     private static string HistoryDatabasePath => Path.Combine(
@@ -304,12 +306,54 @@ public sealed partial class MainWindow : Window, IDisposable
         }
     }
 
+    /// <summary>
+    /// Installs alert rules and the notification channel from settings.
+    /// </summary>
+    /// <remarks>
+    /// Until the rule editor exists (Phase 2), one built-in rule is installed:
+    /// emergency squawks. It is the one alert that is unambiguously worth
+    /// interrupting someone for, needs no configuration, and cannot produce a
+    /// stream of noise. Shipping the engine with no rules at all would be
+    /// dormant code that looks like a feature.
+    /// </remarks>
+    private void ApplyAlertSettings()
+    {
+        _feed.Alerts.Reset();
+
+        if (!_settings.NotificationsEnabled)
+        {
+            _feed.AlertRules = [];
+            _feed.Notifier = NullAlertNotifier.Instance;
+            return;
+        }
+
+        _notifier ??= new ToastAlertNotifier(
+            _services.GetRequiredService<ILogger<ToastAlertNotifier>>());
+
+        _feed.Notifier = _notifier;
+        _feed.AlertRules =
+        [
+            new AlertRule
+            {
+                Id = "builtin-emergency",
+                Name = "Emergency squawk",
+                Trigger = AlertTrigger.EmergencySquawk,
+                Channels = AlertChannels.InApp | AlertChannels.Toast | AlertChannels.Log,
+
+                // No quiet hours on this one by design: an emergency is exactly
+                // the case where a silence window should not apply.
+                Cooldown = TimeSpan.FromMinutes(15),
+            },
+        ];
+    }
+
     private async Task RestartFeedAsync()
     {
         double lat = _settings.HomeLatitude ?? FallbackLat;
         double lon = _settings.HomeLongitude ?? FallbackLon;
 
         await ApplyHistorySettingAsync().ConfigureAwait(true);
+        ApplyAlertSettings();
 
         ViewModel.Units = _settings.Units;
         ViewModel.RangeKm = _settings.MonitoringRadiusKm;
@@ -578,6 +622,9 @@ public sealed partial class MainWindow : Window, IDisposable
 
         _historyStore?.Dispose();
         _historyStore = null;
+
+        _notifier?.Dispose();
+        _notifier = null;
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)

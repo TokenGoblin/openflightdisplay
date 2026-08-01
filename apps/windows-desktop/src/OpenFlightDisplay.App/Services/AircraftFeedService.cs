@@ -2,6 +2,7 @@ namespace OpenFlightDisplay.App.Services;
 
 using Microsoft.Extensions.Logging;
 using OpenFlightDisplay.Core.Aircraft;
+using OpenFlightDisplay.Core.Alerts;
 using OpenFlightDisplay.Core.Areas;
 using OpenFlightDisplay.Core.Feed;
 using OpenFlightDisplay.Core.Quality;
@@ -51,6 +52,22 @@ public sealed partial class AircraftFeedService : IAsyncDisposable
     /// settable property rather than a constructor dependency.
     /// </remarks>
     public IObservationRecorder Recorder { get; set; } = NullObservationRecorder.Instance;
+
+    /// <summary>
+    /// Alert rules evaluated on every poll. Empty by default.
+    /// </summary>
+    public IReadOnlyList<AlertRule> AlertRules { get; set; } = [];
+
+    /// <summary>Where fired alerts are delivered. Defaults to nowhere.</summary>
+    public IAlertNotifier Notifier { get; set; } = NullAlertNotifier.Instance;
+
+    /// <summary>
+    /// Evaluator holding the transition and cooldown state between polls.
+    /// </summary>
+    public AlertEvaluator Alerts { get; } = new();
+
+    /// <summary>Raised for each alert that fires, on the polling thread.</summary>
+    public event EventHandler<IReadOnlyList<AlertEvent>>? AlertsFired;
 
     /// <summary>The provider currently being polled, or <c>null</c> if stopped.</summary>
     public IAviationDataProvider? ActiveProvider => _provider;
@@ -226,6 +243,8 @@ public sealed partial class AircraftFeedService : IAsyncDisposable
         // the poll loop or the UI behind it.
         Recorder.Record(ranked);
 
+        EvaluateAlerts(ranked, now);
+
         if (ranked.Count == 0)
         {
             // An empty sky is a correct answer, not a failure.
@@ -241,6 +260,46 @@ public sealed partial class AircraftFeedService : IAsyncDisposable
         Publish(allStale
             ? new FeedState.Stale(ranked, ProviderId, success.ObservedAt)
             : new FeedState.Live(ranked, ProviderId, success.ObservedAt));
+    }
+
+    /// <summary>
+    /// Runs the alert rules over this poll and delivers whatever fired.
+    /// </summary>
+    /// <remarks>
+    /// Wrapped because a rule with bad geometry, or a notification subsystem
+    /// that refuses to co-operate, must not stop the aircraft feed. Alerts are
+    /// a feature on top of the display, not a prerequisite for it.
+    /// </remarks>
+    private void EvaluateAlerts(IReadOnlyList<AircraftState> aircraft, DateTimeOffset now)
+    {
+        if (AlertRules.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            IReadOnlyList<AlertEvent> fired = Alerts.Evaluate(
+                aircraft, AlertRules, now, TimeOnly.FromDateTime(now.ToLocalTime().DateTime));
+
+            if (fired.Count == 0)
+            {
+                return;
+            }
+
+            foreach (AlertEvent e in fired)
+            {
+                Notifier.Notify(e);
+            }
+
+            AlertsFired?.Invoke(this, fired);
+        }
+#pragma warning disable CA1031 // Alerts must never take the feed down.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            LogAlertEvaluationFailed(_logger, ex);
+        }
     }
 
     private void PublishFailure(ProviderResult.Failure failure)
@@ -308,4 +367,10 @@ public sealed partial class AircraftFeedService : IAsyncDisposable
         Level = LogLevel.Error,
         Message = "Provider {ProviderId} threw an unexpected exception")]
     private static partial void LogPollThrew(ILogger logger, Exception ex, string providerId);
+
+    [LoggerMessage(
+        EventId = 2002,
+        Level = LogLevel.Error,
+        Message = "Alert evaluation failed; the aircraft feed continues")]
+    private static partial void LogAlertEvaluationFailed(ILogger logger, Exception ex);
 }
