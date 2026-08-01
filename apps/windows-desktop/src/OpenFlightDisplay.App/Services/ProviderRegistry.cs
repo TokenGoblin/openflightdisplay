@@ -1,9 +1,11 @@
 namespace OpenFlightDisplay.App.Services;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using OpenFlightDisplay.Core.Settings;
 using OpenFlightDisplay.Providers;
 using OpenFlightDisplay.Providers.AdsbLol;
+using OpenFlightDisplay.Providers.LocalReceiver;
 using OpenFlightDisplay.Providers.Mock;
 using OpenFlightDisplay.Providers.Replay;
 
@@ -31,6 +33,7 @@ public sealed class ProviderRegistry
     [
         DataMode.Mock,
         DataMode.DirectProvider,
+        DataMode.LocalReceiver,
         DataMode.Replay,
     ];
 
@@ -57,8 +60,9 @@ public sealed class ProviderRegistry
             "network. Not implemented yet (Phase 3).",
 
         DataMode.LocalReceiver =>
-            "Read from a dump1090, readsb or tar1090 JSON feed on your own " +
-            "receiver. Not implemented yet (Phase 3).",
+            "Read directly from your own dump1090, readsb or tar1090 receiver. " +
+            "No rate limits, no internet needed, lowest latency. Set the receiver " +
+            "URL in Settings - a bare host like http://192.168.1.10 is enough.",
 
         _ => string.Empty,
     };
@@ -81,11 +85,20 @@ public sealed class ProviderRegistry
     /// The mode is recognised but not implemented. Thrown rather than quietly
     /// substituting mock data, which would present synthetic aircraft as live.
     /// </exception>
-    public IAviationDataProvider Resolve(DataMode mode) => mode switch
+    public IAviationDataProvider Resolve(DataMode mode) => Resolve(mode, receiverUrl: null);
+
+    /// <inheritdoc cref="Resolve(DataMode)"/>
+    /// <param name="receiverUrl">
+    /// Base URL of a local receiver. Required for
+    /// <see cref="DataMode.LocalReceiver"/> and ignored otherwise.
+    /// </param>
+    public IAviationDataProvider Resolve(DataMode mode, string? receiverUrl) => mode switch
     {
         DataMode.Mock => _services.GetRequiredService<MockProvider>(),
 
         DataMode.DirectProvider => _services.GetRequiredService<AdsbLolProvider>(),
+
+        DataMode.LocalReceiver => CreateLocalReceiver(receiverUrl),
 
         // An empty recording is honest: the feed reports "replay complete"
         // immediately rather than pretending to play something.
@@ -94,4 +107,37 @@ public sealed class ProviderRegistry
         _ => throw new NotSupportedException(
             $"Data mode '{mode}' is not implemented yet. {Describe(mode)}"),
     };
+
+    /// <summary>
+    /// Builds a receiver client for the configured URL.
+    /// </summary>
+    /// <remarks>
+    /// Constructed per call rather than injected, because the base address is a
+    /// user setting that can change at runtime. A bare host is accepted and the
+    /// provider probes the well-known paths, so the user does not need to know
+    /// whether their install serves under <c>/data/</c> or <c>/dump1090/data/</c>.
+    /// </remarks>
+    private LocalReceiverProvider CreateLocalReceiver(string? receiverUrl)
+    {
+        if (string.IsNullOrWhiteSpace(receiverUrl))
+        {
+            throw new NotSupportedException(
+                "No receiver URL is configured. Set one in Settings, for example " +
+                "http://192.168.1.10 or http://raspberrypi.local.");
+        }
+
+        if (!Uri.TryCreate(receiverUrl, UriKind.Absolute, out Uri? baseAddress)
+            || (baseAddress.Scheme != Uri.UriSchemeHttp && baseAddress.Scheme != Uri.UriSchemeHttps))
+        {
+            throw new NotSupportedException(
+                $"'{receiverUrl}' is not a usable receiver address. It should look like " +
+                "http://192.168.1.10 or http://raspberrypi.local.");
+        }
+
+        var client = new HttpClient { BaseAddress = baseAddress, Timeout = TimeSpan.FromSeconds(5) };
+
+        return new LocalReceiverProvider(
+            client,
+            _services.GetRequiredService<ILogger<LocalReceiverProvider>>());
+    }
 }

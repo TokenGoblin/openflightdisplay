@@ -319,6 +319,19 @@
                             <TextBox x:Name="RadiusBox" Header="Radius (km)" Width="140" />
                         </StackPanel>
 
+                        <TextBlock Text="Local ADS-B receiver" FontWeight="SemiBold" />
+                        <TextBlock
+                            FontSize="12" TextWrapping="Wrap" MaxWidth="480"
+                            HorizontalAlignment="Left"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="Used when the Local ADS-B receiver data source is selected. A bare host is enough — the common dump1090, readsb and tar1090 paths are tried automatically." />
+                        <TextBox
+                            x:Name="ReceiverUrlBox"
+                            Header="Receiver URL"
+                            Width="320"
+                            HorizontalAlignment="Left"
+                            PlaceholderText="http://192.168.1.10" />
+
                         <TextBlock Text="Flight history" FontWeight="SemiBold" />
                         <CheckBox x:Name="HistoryCheck" Checked="OnHistoryToggled" Unchecked="OnHistoryToggled">
                             <StackPanel>

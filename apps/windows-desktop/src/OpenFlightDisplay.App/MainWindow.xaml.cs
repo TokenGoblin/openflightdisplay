@@ -245,6 +245,7 @@ public sealed partial class MainWindow : Window, IDisposable
             LonBox.Text = _settings.HomeLongitude?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
             RadiusBox.Text = _settings.MonitoringRadiusKm.ToString(CultureInfo.CurrentCulture);
             HistoryCheck.IsChecked = _settings.HistoryEnabled;
+            ReceiverUrlBox.Text = _settings.LocalReceiverUrl ?? string.Empty;
         }
         finally
         {
@@ -367,7 +368,7 @@ public sealed partial class MainWindow : Window, IDisposable
         IAviationDataProvider provider;
         try
         {
-            provider = _providers.Resolve(_settings.DataMode);
+            provider = _providers.Resolve(_settings.DataMode, _settings.LocalReceiverUrl);
         }
         catch (NotSupportedException)
         {
@@ -464,11 +465,18 @@ public sealed partial class MainWindow : Window, IDisposable
 
         SettingsError.Visibility = Visibility.Collapsed;
 
+        // Blank clears the setting rather than storing an empty string, so
+        // "no receiver configured" is one representable state, not two.
+        string? receiverUrl = string.IsNullOrWhiteSpace(ReceiverUrlBox.Text)
+            ? null
+            : ReceiverUrlBox.Text.Trim();
+
         _settings = _settings with
         {
             HomeLatitude = lat,
             HomeLongitude = lon,
             MonitoringRadiusKm = radiusKm,
+            LocalReceiverUrl = receiverUrl,
         };
 
         bool saved = await _settingsStore.SaveAsync(_settings).ConfigureAwait(true);

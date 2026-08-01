@@ -39,8 +39,29 @@ Lives at `apps/windows-desktop/`. Architecture and the reasoning behind it:
 | Diagnostics | Not built (Phase 4) |
 | MSIX packaging / CI | **Built.** See "Packaging" below |
 
-`adsb.lol` and replay adapters are implemented and tested but cannot be selected
-from the UI until the data-source picker lands.
+### Local ADS-B receivers
+
+Reading directly from your own dump1090, readsb or tar1090 install is supported.
+Select **Local ADS-B receiver** as the data source and set the receiver URL in
+Settings. A bare host is enough — `http://192.168.1.10` or
+`http://raspberrypi.local` — because the app probes the common paths
+(`/data/aircraft.json`, `/dump1090/data/aircraft.json`,
+`/dump1090-fa/data/aircraft.json`, `/aircraft.json`) and remembers the one that
+answered.
+
+This is the best long-term source: no rate limits, no terms of service, no
+internet dependency, and the lowest latency available.
+
+**Only HTTP JSON feeds are supported.** Raw Beast binary and serial decoding
+need a full Mode S decoder and are out of scope; the provider contract is shaped
+so they could be added without changing it.
+
+One failure mode gets special handling. If a receiver's decoder stops while its
+web server keeps running, the served file still parses perfectly and every
+aircraft still looks live. The app compares the receiver's own `now` timestamp
+against the local clock and refuses data more than two minutes behind, saying
+the decoder may have stopped — rather than showing hours-old aircraft as
+current.
 
 ## Building and running
 
