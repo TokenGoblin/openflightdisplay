@@ -36,6 +36,24 @@
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.10" />
   </ItemGroup>
 
+  <ItemGroup Label="SQLite native layer - transitive pins">
+    <!--
+      Microsoft.Data.Sqlite 10.0.10 resolves SQLitePCLRaw.lib.e_sqlite3 2.1.11,
+      which carries a known HIGH severity advisory (GHSA-2m69-gcr7-jv3q). These
+      pins pull the patched native library and the matching managed packages
+      forward instead. Transitive pinning is enabled above, so these apply even
+      though nothing references them directly.
+
+      Re-check these whenever Microsoft.Data.Sqlite is upgraded: once it ships
+      resolving a non-vulnerable version by itself, the pins should be removed
+      rather than left to silently hold packages back.
+    -->
+    <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
+    <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
+    <PackageVersion Include="SQLitePCLRaw.core" Version="3.0.5" />
+    <PackageVersion Include="SQLitePCLRaw.provider.e_sqlite3" Version="3.0.5" />
+  </ItemGroup>
+
   <ItemGroup Label="Logging sinks">
     <PackageVersion Include="Serilog.Extensions.Hosting" Version="10.0.0" />
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />

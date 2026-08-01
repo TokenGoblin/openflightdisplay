@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Local SQLite storage. Plain net10.0 so the whole persistence layer,
+    migrations included, can be tested on any runner without Windows.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>OpenFlightDisplay.Persistence</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OpenFlightDisplay.Core\OpenFlightDisplay.Core.csproj" />
+  </ItemGroup>
+
+</Project>
