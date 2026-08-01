@@ -149,43 +149,75 @@ an `always()` step so it cannot outlive a failed build.
 
 ## Known defects
 
-### DPI scaling on displays above 100% (open, not fixed)
+### DPI scaling on displays above 100% (NOT a defect — measurement error)
 
-**Symptom.** On a display with scaling above 100%, the whole UI is rendered
-larger than the window. The outer radar rings and the attribution footer fall
-outside the client area, and the navigation rail is wider than it should be. On
-a 100% display the layout is correct.
+This was tracked as the highest-impact open defect. It does not exist. The app
+lays out and renders correctly on a scaled display; the *screenshots* of it were
+wrong. Recorded in full because the false symptom was convincing and cost real
+time, and because the same mistake is easy to make again.
 
-**What was measured.** On a 150% display, with a 960x545 physical window, the
-radar surface reports `ActualWidth/ActualHeight` of 896x417 — the window's
-*physical* size minus chrome, treated as though it were device-independent
-pixels. Content drawn at DIP coordinate 448 lands at physical pixel 668, a
-factor of 1.4966. The same factor applies to the navigation rail
-(48 DIP rendering ~78 physical). So the XAML island lays out using physical
-pixels as if they were DIPs and then rasterises at the display scale.
+**Claimed symptom.** On a display above 100%, the whole UI renders larger than
+the window: outer radar rings and the attribution footer outside the client
+area, navigation rail oversized.
 
-**Ruled out**, each by direct experiment:
+**What the app actually reports.** Instrumented from inside the process on a
+1920x1200 display at 150%:
 
-- Stale layout state. The scale pass and the aircraft pass once cached different
-  sizes; collapsing them into one draw path that reads the host grid at draw
-  time fixed their disagreement with each other but not the overall scaling.
-- The screenshot method. Reproduces at the window's natural size with no
-  programmatic resizing, and via `PrintWindow` as well as screen capture.
-- DPI awareness. The process was briefly DPI-unaware after `app.manifest` was
-  removed; restoring a minimal manifest brought `GetProcessDpiAwareness` to
-  `2` (per-monitor v2) with no change to the symptom.
-- Self-contained vs framework-dependent Windows App SDK deployment. No
-  difference.
+| | |
+|---|---|
+| `GetWindowRect` | 1440 x 817 physical |
+| `GetClientRect` | 1418 x 761 physical |
+| `GetDpiForWindow` | 144 (scale 1.5000) |
+| process DPI awareness | 2 — per-monitor |
+| `XamlRoot.RasterizationScale` | 1.5000 |
+| `XamlRoot.Size` | 945.3 x 507.3 DIP |
 
-An early measurement suggested the display was at 100%; that reading came from
-`GetDeviceCaps` in a DPI-unaware PowerShell process, which always reports 96 DPI,
-and was wrong.
+`945.3 x 1.5 = 1418`, which is the client width exactly; the same holds
+vertically. Layout size, rasterisation scale and client rect agree to the pixel.
+A capture taken from a per-monitor-DPI-aware thread shows all four range rings,
+all four cardinal marks and the `Data:` footer comfortably inside the window.
 
-**Next steps.** Most likely in the unpackaged WinUI bootstrap path — the window
-is created and sized before the island learns the monitor's scale. Worth trying:
-running packaged (MSIX) to see whether it reproduces; handling `WM_DPICHANGED`
-explicitly; and setting the window size through `AppWindow` rather than relying
-on the default.
+**The actual bug, and it was in the measuring.** PowerShell is not per-monitor
+DPI aware, so it sees a virtualised desktop: `GetWindowRect` on the 1440x817
+window returned **960x545** — the physical size divided by 1.5. That is the
+"960x545 physical window" the earlier investigation started from. Capturing that
+rect against the real, unvirtualised screen crops the top-left two-thirds of the
+window, which cuts off exactly the outer rings and the footer and makes
+everything left inside look 1.5x too large.
+
+Every "measurement" then followed from the bad rect:
+
+- *"The surface reports 896 DIP wide, which is the physical size minus chrome
+  treated as DIPs."* 896 DIP is correct — it is 945.3 minus the 48 DIP compact
+  navigation rail. It only looked like a physical measurement because it was
+  being compared against a virtualised 960.
+- *"Content drawn at DIP 448 lands at physical pixel 668, a factor of 1.4966."*
+  That is correct rendering. Content at DIP 448 on a 150% display is *supposed*
+  to land near physical 672. Correct DPI scaling was read as the defect.
+- *"The screenshot method was ruled out — it reproduces via `PrintWindow` too."*
+  Both paths were driven from the same DPI-unaware rect, so both were wrong in
+  the same way. Ruling out a shared cause by swapping one component downstream
+  of it proves nothing.
+
+Note this is the *second* time DPI-unaware PowerShell produced a wrong reading
+here — the first was `GetDeviceCaps` reporting 96 DPI and suggesting the display
+was at 100%. That one was caught. This one was not, and it was promoted to the
+top of the backlog.
+
+**Consequently: capture windows with `tools/Capture-Window.ps1`**, which calls
+`SetThreadDpiAwarenessContext(PER_MONITOR_AWARE_V2)` before it touches user32,
+so the rect and the capture are both in physical pixels:
+
+```powershell
+./apps/windows-desktop/tools/Capture-Window.ps1 -Path radar.png -Foreground
+```
+
+Do not measure a window from a DPI-unaware process. If a UI measurement has to
+be trusted, take it from inside the app.
+
+**Still worth doing** — untested rather than broken: moving the window between
+monitors with *different* scale factors (`WM_DPICHANGED`). Only a single-monitor
+150% configuration has been verified.
 
 ### Radar label density (mitigated)
 

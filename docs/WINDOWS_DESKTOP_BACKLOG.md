@@ -33,37 +33,29 @@ observations across 12 mock aircraft with nulls preserved and **zero**
 
 ## Open defects
 
-### 1. DPI scaling above 100% — OPEN, highest impact
+### 1. DPI scaling above 100% — CLOSED, was never a defect
 
-The whole UI renders larger than the window on a scaled display. Outer radar
-rings and the attribution footer fall outside the client area. **A 100% display
-is unaffected**, which is why it was not obvious immediately.
+The app renders correctly at 150%. Instrumented from inside the process:
+`XamlRoot.Size` 945.3×507.3 DIP × `RasterizationScale` 1.5000 = 1418 physical,
+which is `GetClientRect` exactly. A capture from a DPI-aware thread shows all
+four rings, all four cardinals and the footer inside the window.
 
-Measured on a 150% display with a 960×545 physical window: the radar surface
-reports `ActualWidth/Height` of 896×417 — the window's *physical* size minus
-chrome, treated as though it were device-independent pixels. Content drawn at
-DIP 448 lands at physical pixel 668, a factor of **1.4966**. The navigation rail
-is oversized by the same factor, so it is the whole visual tree, not one control.
+The "960×545 physical window" the whole investigation rested on was
+`GetWindowRect` called from DPI-*unaware* PowerShell, which sees a virtualised
+desktop and returned the real 1440×817 divided by 1.5. Capturing that rect
+against the unvirtualised screen crops the top-left two-thirds of the window —
+cutting off precisely the outer rings and the footer, and making what remains
+look 1.5× oversized. "Content at DIP 448 lands at physical 668" was correct
+rendering being read as the bug.
 
-Ruled out by experiment, each recorded in `WINDOWS_DESKTOP.md`:
+Full write-up in `WINDOWS_DESKTOP.md`. **Capture windows only with
+`apps/windows-desktop/tools/Capture-Window.ps1`**, which sets per-monitor DPI
+awareness on the calling thread first. Two wrong readings here have now come
+from measuring a window from a DPI-unaware process.
 
-- Stale layout state (collapsed the two draw passes into one — no change)
-- The screenshot method (reproduces at natural size, and via `PrintWindow`)
-- DPI awareness (`GetProcessDpiAwareness` now returns `2`, per-monitor v2 — no change)
-- Self-contained vs framework-dependent Windows App SDK deployment — no change
-
-**Untried leads, in the order worth trying:**
-
-1. Run the **packaged MSIX** rather than unpackaged. Packaging changes how the
-   Windows App SDK bootstraps, and this has never been tested — installing needs
-   a trusted certificate, procedure in `WINDOWS_DESKTOP.md`.
-2. Handle `WM_DPICHANGED` explicitly.
-3. Size the window through `AppWindow` rather than relying on the default.
-
-> One earlier measurement claimed the display was at 100%. That reading came
-> from `GetDeviceCaps` inside a DPI-unaware PowerShell process, which always
-> reports 96 DPI. It was wrong and it wasted time — measure DPI from inside a
-> DPI-aware process.
+Genuinely untested, and the honest remainder of this item: monitors with
+*different* scale factors (`WM_DPICHANGED`). Only single-monitor 150% is
+verified.
 
 ### 2. CI has never executed — OPEN
 
@@ -130,8 +122,14 @@ The engines exist and are tested; these are the missing surfaces.
 - Accessibility review (keyboard nav, screen reader, high contrast, reduced
   motion). Rows carry `AccessibleDescription`; nothing has been audited
 - Sleep/resume and network-failure testing
+- Mixed-DPI multi-monitor: drag the window between monitors at different scale
+  factors and confirm `WM_DPICHANGED` is handled. Single-monitor 150% is verified;
+  this is not
 - Multi-hour soak. Memory is flat over ~45 s at 1,000 aircraft; longer is unknown
 - Screenshots and a troubleshooting guide
+- Cosmetic: the outermost ring label sits on top of the `N` cardinal mark — both
+  are drawn near `CentreX` at the top of the plot. Visible in every radar
+  capture. Not a scaling problem; the two labels just need offsetting
 - Symbol packages need `mspdbcmf.exe` from the VS C++ toolset — absent locally,
   present on `windows-latest`
 
