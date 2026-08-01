@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ContentDialog
+    x:Class="OpenFlightDisplay.App.Dialogs.OnboardingDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="Set up OpenFlightDisplay"
+    PrimaryButtonText="Next"
+    SecondaryButtonText="Back"
+    CloseButtonText="Skip setup"
+    DefaultButton="Primary"
+    PrimaryButtonClick="OnNext"
+    SecondaryButtonClick="OnBack">
+
+    <ScrollViewer MaxHeight="420">
+        <Grid MinWidth="460">
+
+            <!-- 1. Privacy -->
+            <StackPanel x:Name="StepPrivacy" Spacing="12">
+                <TextBlock Text="Your data stays on this machine" FontSize="18" FontWeight="SemiBold" />
+                <TextBlock TextWrapping="Wrap"
+                           Text="OpenFlightDisplay is local-first. There is no account, no telemetry and no analytics." />
+                <TextBlock TextWrapping="Wrap"
+                           Text="Your approximate location is used for one thing: asking your chosen aviation-data provider what is flying near you. It is not sent anywhere else." />
+                <TextBlock TextWrapping="Wrap"
+                           Text="Settings are stored in your user profile. Flight history is off unless you turn it on, and stays on this machine unless you export it yourself." />
+                <TextBlock TextWrapping="Wrap" FontSize="12"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Text="You can skip this setup and use mock data offline. Everything here can be changed later in Settings." />
+            </StackPanel>
+
+            <!-- 2. Data source -->
+            <StackPanel x:Name="StepSource" Spacing="12" Visibility="Collapsed">
+                <TextBlock Text="Where should aircraft data come from?" FontSize="18" FontWeight="SemiBold" />
+                <RadioButton x:Name="ModeMock" GroupName="mode" IsChecked="True">
+                    <StackPanel>
+                        <TextBlock Text="Mock data (offline)" FontWeight="SemiBold" />
+                        <TextBlock Text="Synthetic aircraft. No network needed." FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton x:Name="ModeLive" GroupName="mode">
+                    <StackPanel>
+                        <TextBlock Text="adsb.lol (live)" FontWeight="SemiBold" />
+                        <TextBlock Text="Real aircraft over the internet. Free, no API key." FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </RadioButton>
+                <TextBlock TextWrapping="Wrap" FontSize="12"
+                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                           Text="Gateway and local-receiver modes are planned but not implemented yet." />
+            </StackPanel>
+
+            <!-- 3. Location -->
+            <StackPanel x:Name="StepLocation" Spacing="12" Visibility="Collapsed">
+                <TextBlock Text="Where are you?" FontSize="18" FontWeight="SemiBold" />
+                <TextBlock TextWrapping="Wrap"
+                           Text="Enter the coordinates you want to watch from. Mock data works without this; live data needs it." />
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <TextBox x:Name="LatBox" Header="Latitude" Width="150" />
+                    <TextBox x:Name="LonBox" Header="Longitude" Width="150" />
+                </StackPanel>
+                <TextBox x:Name="RadiusBox" Header="Monitoring radius (km)" Width="200" Text="80" />
+                <TextBlock x:Name="LocationError" TextWrapping="Wrap" Visibility="Collapsed"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+
+            <!-- 4. Units -->
+            <StackPanel x:Name="StepUnits" Spacing="12" Visibility="Collapsed">
+                <TextBlock Text="Which units?" FontSize="18" FontWeight="SemiBold" />
+                <RadioButton x:Name="UnitsAviation" GroupName="units" IsChecked="True"
+                             Content="Aviation — nautical miles, feet, knots" />
+                <RadioButton x:Name="UnitsMetric" GroupName="units"
+                             Content="Metric — kilometres, metres, km/h" />
+                <RadioButton x:Name="UnitsImperial" GroupName="units"
+                             Content="Imperial — miles, feet, mph" />
+                <TextBlock TextWrapping="Wrap" FontSize="12"
+                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                           Text="Altitude is shown in feet for both aviation and imperial: flight levels are feet worldwide." />
+            </StackPanel>
+
+            <!-- 5. Optional features -->
+            <StackPanel x:Name="StepFeatures" Spacing="12" Visibility="Collapsed">
+                <TextBlock Text="Optional features" FontSize="18" FontWeight="SemiBold" />
+                <CheckBox x:Name="HistoryCheck">
+                    <StackPanel>
+                        <TextBlock Text="Record flight history locally" FontWeight="SemiBold" />
+                        <TextBlock TextWrapping="Wrap" MaxWidth="400" FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Text="Keeps a local record of every aircraft observed. Off by default because that is a log of everything that flies over you." />
+                    </StackPanel>
+                </CheckBox>
+                <CheckBox x:Name="NotificationsCheck">
+                    <StackPanel>
+                        <TextBlock Text="Windows notifications" FontWeight="SemiBold" />
+                        <TextBlock TextWrapping="Wrap" MaxWidth="400" FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Text="For alerts you configure yourself." />
+                    </StackPanel>
+                </CheckBox>
+                <TextBlock TextWrapping="Wrap" FontSize="12"
+                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                           Text="Neither feature is implemented yet. Your choice is saved and takes effect when they land." />
+            </StackPanel>
+
+            <!-- 6. Connection test -->
+            <StackPanel x:Name="StepTest" Spacing="12" Visibility="Collapsed">
+                <TextBlock Text="Checking your data source" FontSize="18" FontWeight="SemiBold" />
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <ProgressRing x:Name="TestRing" Width="20" Height="20" IsActive="False" />
+                    <TextBlock x:Name="TestResult" VerticalAlignment="Center" TextWrapping="Wrap"
+                               Text="Not tested yet." />
+                </StackPanel>
+                <TextBlock x:Name="TestDetail" TextWrapping="Wrap" FontSize="12"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <Button x:Name="TestButton" Content="Test again" Click="OnTestAgain" />
+            </StackPanel>
+
+        </Grid>
+    </ScrollViewer>
+</ContentDialog>

@@ -94,6 +94,23 @@ public sealed partial class FlightBoardViewModel : ObservableObject
     /// <summary>Rows currently on the board.</summary>
     public ObservableCollection<AircraftRowViewModel> Aircraft { get; } = [];
 
+    /// <summary>
+    /// Reports a failure that happened during startup, before the feed began.
+    /// </summary>
+    /// <remarks>
+    /// Startup runs outside the feed's own state machine, so a failure there
+    /// has no <see cref="FeedState"/> to travel in. Without this the app would
+    /// sit on its initial state with no explanation — exactly the silent
+    /// failure the project forbids.
+    /// </remarks>
+    public void ReportStartupFailure(string detail)
+    {
+        StatusHeadline = "Could not start";
+        StatusDetail = $"{detail} Try restarting; settings can be corrected from the Settings page.";
+        StatusSeverity = StatusSeverity.Error;
+        IsBusy = false;
+    }
+
     /// <summary>Starts the feed for the given provider and area.</summary>
     public Task StartAsync(
         Providers.IAviationDataProvider provider,

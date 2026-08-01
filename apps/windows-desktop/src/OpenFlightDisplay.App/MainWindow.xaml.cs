@@ -4,6 +4,7 @@ using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using OpenFlightDisplay.App.Dialogs;
 using OpenFlightDisplay.App.Services;
 using OpenFlightDisplay.App.ViewModels;
 using OpenFlightDisplay.Core.Areas;
@@ -48,24 +49,92 @@ public sealed partial class MainWindow : Window
 
         Nav.SelectedItem = Nav.MenuItems[0];
 
-        // Fire-and-forget is deliberate: the feed publishes its own state,
-        // including failures, so there is no outcome worth awaiting here. The
-        // discard exists so a startup bug cannot become an unobserved task
-        // exception.
-        _ = InitialiseAsync();
+        // Startup is deferred until the content is loaded, because
+        // ContentDialog.ShowAsync needs a live XamlRoot and there is none in the
+        // constructor. Running it here threw, and because the task was
+        // discarded the exception vanished and the app simply sat on
+        // "Setup required" forever.
+        if (Content is FrameworkElement root)
+        {
+            root.Loaded += OnContentLoaded;
+        }
     }
 
     /// <summary>Bound by the XAML.</summary>
     public FlightBoardViewModel ViewModel { get; }
 
+    private async void OnContentLoaded(object sender, RoutedEventArgs e)
+    {
+        // Once only — Loaded can fire again on theme or visual-tree changes.
+        if (Content is FrameworkElement root)
+        {
+            root.Loaded -= OnContentLoaded;
+        }
+
+        try
+        {
+            await InitialiseAsync().ConfigureAwait(true);
+        }
+#pragma warning disable CA1031 // Startup must report failure, not disappear.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            // Anything thrown here previously became an unobserved task
+            // exception and left the app on its initial state with no
+            // explanation. Surfacing it is the whole point of the no-silent-
+            // failure rule.
+            ViewModel.ReportStartupFailure(ex.Message);
+        }
+    }
+
     private async Task InitialiseAsync()
     {
         _settings = await _settingsStore.LoadAsync().ConfigureAwait(true);
+
+        if (!_settings.OnboardingCompleted)
+        {
+            await RunOnboardingAsync().ConfigureAwait(true);
+        }
 
         PopulateDataSources();
         PopulateSettingsForm();
 
         await RestartFeedAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Shows first-run setup.
+    /// </summary>
+    /// <remarks>
+    /// Skipping is allowed and leaves the defaults in place, which are working
+    /// mock data — first run must not be a locked door. Skipping deliberately
+    /// does <b>not</b> mark onboarding complete, so it is offered again next
+    /// launch rather than silently never appearing.
+    /// </remarks>
+    private async Task RunOnboardingAsync()
+    {
+        var dialog = new OnboardingDialog(_providers, _settings)
+        {
+            XamlRoot = Content.XamlRoot,
+        };
+
+        await dialog.ShowAsync().AsTask().ConfigureAwait(true);
+
+        if (!dialog.Completed)
+        {
+            return;
+        }
+
+        _settings = dialog.Result;
+
+        if (!await _settingsStore.SaveAsync(_settings).ConfigureAwait(true))
+        {
+            // The chosen settings still apply to this session; only persistence
+            // failed, and the atomic write means nothing was corrupted.
+            SettingsError.Text =
+                "Your choices could not be saved and will be asked for again next launch.";
+            SettingsError.Visibility = Visibility.Visible;
+        }
     }
 
     private void PopulateDataSources()
