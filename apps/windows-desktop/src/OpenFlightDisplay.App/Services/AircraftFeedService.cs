@@ -42,6 +42,16 @@ public sealed partial class AircraftFeedService : IAsyncDisposable
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
+    /// <summary>
+    /// Where observations are recorded. Defaults to discarding them.
+    /// </summary>
+    /// <remarks>
+    /// History is opt-in, so the default is the null recorder rather than a
+    /// database. Swapped when the user enables history, which is why this is a
+    /// settable property rather than a constructor dependency.
+    /// </remarks>
+    public IObservationRecorder Recorder { get; set; } = NullObservationRecorder.Instance;
+
     /// <summary>The provider currently being polled, or <c>null</c> if stopped.</summary>
     public IAviationDataProvider? ActiveProvider => _provider;
 
@@ -207,6 +217,14 @@ public sealed partial class AircraftFeedService : IAsyncDisposable
             observerLat,
             observerLon,
             rankingMode);
+
+        // Recorded before publishing, and only what survived filtering and
+        // ranking — history should hold what the user was actually shown, not
+        // every aircraft the provider happened to return for a wider query.
+        //
+        // Non-blocking by contract: a slow or broken database must not stall
+        // the poll loop or the UI behind it.
+        Recorder.Record(ranked);
 
         if (ranked.Count == 0)
         {

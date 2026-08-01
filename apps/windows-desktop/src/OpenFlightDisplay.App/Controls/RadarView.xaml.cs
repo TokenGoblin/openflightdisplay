@@ -9,7 +9,9 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using OpenFlightDisplay.App.ViewModels;
 using OpenFlightDisplay.Core.Aircraft;
+using OpenFlightDisplay.Core.Geo;
 using OpenFlightDisplay.Core.Units;
+using OpenFlightDisplay.Persistence;
 using Windows.Foundation;
 
 /// <summary>
@@ -45,6 +47,36 @@ public sealed partial class RadarView : UserControl
             typeof(RadarView),
             new PropertyMetadata(80.0, OnRangeChanged));
 
+    /// <summary>
+    /// Recorded track of the selected aircraft, oldest first.
+    /// </summary>
+    /// <remarks>
+    /// Positions are absolute lat/lon rather than screen points, so the trail
+    /// stays correct when the range or window size changes.
+    /// </remarks>
+    public static readonly DependencyProperty TrailProperty =
+        DependencyProperty.Register(
+            nameof(Trail),
+            typeof(IReadOnlyList<TrailPoint>),
+            typeof(RadarView),
+            new PropertyMetadata(null, OnTrailChanged));
+
+    /// <summary>Observer latitude, the origin the plot is drawn around.</summary>
+    public static readonly DependencyProperty ObserverLatitudeProperty =
+        DependencyProperty.Register(
+            nameof(ObserverLatitude),
+            typeof(double),
+            typeof(RadarView),
+            new PropertyMetadata(0.0, OnTrailChanged));
+
+    /// <summary>Observer longitude.</summary>
+    public static readonly DependencyProperty ObserverLongitudeProperty =
+        DependencyProperty.Register(
+            nameof(ObserverLongitude),
+            typeof(double),
+            typeof(RadarView),
+            new PropertyMetadata(0.0, OnTrailChanged));
+
     /// <summary>Units for the ring labels.</summary>
     public static readonly DependencyProperty UnitsProperty =
         DependencyProperty.Register(
@@ -73,6 +105,24 @@ public sealed partial class RadarView : UserControl
     {
         get => (UnitSystem)GetValue(UnitsProperty);
         set => SetValue(UnitsProperty, value);
+    }
+
+    public IReadOnlyList<TrailPoint>? Trail
+    {
+        get => (IReadOnlyList<TrailPoint>?)GetValue(TrailProperty);
+        set => SetValue(TrailProperty, value);
+    }
+
+    public double ObserverLatitude
+    {
+        get => (double)GetValue(ObserverLatitudeProperty);
+        set => SetValue(ObserverLatitudeProperty, value);
+    }
+
+    public double ObserverLongitude
+    {
+        get => (double)GetValue(ObserverLongitudeProperty);
+        set => SetValue(ObserverLongitudeProperty, value);
     }
 
     /// <summary>Raised when an aircraft symbol is clicked.</summary>
@@ -133,6 +183,74 @@ public sealed partial class RadarView : UserControl
         var radar = (RadarView)d;
         radar.DrawScale();
         radar.DrawAircraft();
+    }
+
+    private static void OnTrailChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        => ((RadarView)d).DrawAircraft();
+
+    /// <summary>
+    /// Converts a geographic position to a point on the plot.
+    /// </summary>
+    /// <remarks>
+    /// Uses the same haversine distance and initial bearing the ranker does, so
+    /// a trail point and the live symbol for the same coordinates land in
+    /// exactly the same place. Computing the trail any other way would leave a
+    /// visible gap between the track and the aircraft drawing it.
+    /// </remarks>
+    private bool TryProject(double lat, double lon, out double x, out double y)
+    {
+        double distanceKm = GeoMath.HaversineDistanceKm(
+            ObserverLatitude, ObserverLongitude, lat, lon);
+
+        if (distanceKm > RangeKm)
+        {
+            x = 0;
+            y = 0;
+            return false;
+        }
+
+        double bearingRad = GeoMath.InitialBearingDeg(
+            ObserverLatitude, ObserverLongitude, lat, lon) * Math.PI / 180.0;
+
+        x = CentreX + (distanceKm * PixelsPerKm * Math.Sin(bearingRad));
+        y = CentreY - (distanceKm * PixelsPerKm * Math.Cos(bearingRad));
+        return true;
+    }
+
+    private void DrawTrail()
+    {
+        IReadOnlyList<TrailPoint> trail = Trail ?? [];
+
+        // Two points minimum: a single recorded position is not a track, and
+        // drawing a zero-length line just puts a dot under the aircraft.
+        if (trail.Count < 2 || PixelsPerKm <= 0)
+        {
+            return;
+        }
+
+        var brush = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"];
+        var line = new Polyline
+        {
+            Stroke = brush,
+            StrokeThickness = 1.5,
+            IsHitTestVisible = false,
+        };
+
+        foreach (TrailPoint point in trail)
+        {
+            // Points outside the current range are skipped rather than clamped
+            // to the edge, which would draw a track along the rim that the
+            // aircraft never flew.
+            if (TryProject(point.Latitude, point.Longitude, out double x, out double y))
+            {
+                line.Points.Add(new Point(x, y));
+            }
+        }
+
+        if (line.Points.Count >= 2)
+        {
+            AircraftCanvas.Children.Add(line);
+        }
     }
 
     private void OnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -243,6 +361,9 @@ public sealed partial class RadarView : UserControl
         {
             return;
         }
+
+        // Trail first so aircraft symbols draw on top of it.
+        DrawTrail();
 
         var symbolBrush = (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
         var mutedBrush = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"];

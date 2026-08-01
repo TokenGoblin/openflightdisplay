@@ -71,6 +71,7 @@
   <ItemGroup>
     <ProjectReference Include="..\OpenFlightDisplay.Core\OpenFlightDisplay.Core.csproj" />
     <ProjectReference Include="..\OpenFlightDisplay.Infrastructure\OpenFlightDisplay.Infrastructure.csproj" />
+    <ProjectReference Include="..\OpenFlightDisplay.Persistence\OpenFlightDisplay.Persistence.csproj" />
     <ProjectReference Include="..\OpenFlightDisplay.Providers\OpenFlightDisplay.Providers.csproj" />
   </ItemGroup>
 

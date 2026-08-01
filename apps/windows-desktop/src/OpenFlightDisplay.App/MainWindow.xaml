@@ -84,6 +84,9 @@
                         Aircraft="{x:Bind ViewModel.Aircraft, Mode=OneWay}"
                         RangeKm="{x:Bind ViewModel.RangeKm, Mode=OneWay}"
                         Units="{x:Bind ViewModel.Units, Mode=OneWay}"
+                        Trail="{x:Bind ViewModel.SelectedTrail, Mode=OneWay}"
+                        ObserverLatitude="{x:Bind ViewModel.ObserverLatitude, Mode=OneWay}"
+                        ObserverLongitude="{x:Bind ViewModel.ObserverLongitude, Mode=OneWay}"
                         AircraftSelected="OnAircraftSelected" />
 
                     <!-- Detail pane -->
@@ -269,6 +272,21 @@
                             <TextBox x:Name="LonBox" Header="Longitude" Width="160" />
                             <TextBox x:Name="RadiusBox" Header="Radius (km)" Width="140" />
                         </StackPanel>
+
+                        <TextBlock Text="Flight history" FontWeight="SemiBold" />
+                        <CheckBox x:Name="HistoryCheck" Checked="OnHistoryToggled" Unchecked="OnHistoryToggled">
+                            <StackPanel>
+                                <TextBlock Text="Record observations locally" />
+                                <TextBlock
+                                    TextWrapping="Wrap" MaxWidth="420" FontSize="12"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Text="Enables aircraft trails on the radar and keeps a local record of what was observed. Stored on this machine only, pruned by age and size." />
+                            </StackPanel>
+                        </CheckBox>
+                        <TextBlock
+                            x:Name="HistoryStatus"
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
 
                         <TextBlock
                             x:Name="SettingsError"

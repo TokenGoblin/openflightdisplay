@@ -66,6 +66,24 @@ public sealed partial class FlightBoardViewModel : ObservableObject
     [ObservableProperty]
     public partial double RangeKm { get; set; }
 
+    /// <summary>Observer latitude, the origin the radar is drawn around.</summary>
+    [ObservableProperty]
+    public partial double ObserverLatitude { get; set; }
+
+    /// <summary>Observer longitude.</summary>
+    [ObservableProperty]
+    public partial double ObserverLongitude { get; set; }
+
+    /// <summary>
+    /// Recorded track of the selected aircraft, or empty when history is off.
+    /// </summary>
+    /// <remarks>
+    /// Empty rather than null when history is disabled: there is no trail to
+    /// show, and that is a normal state rather than a missing value.
+    /// </remarks>
+    [ObservableProperty]
+    public partial IReadOnlyList<Persistence.TrailPoint> SelectedTrail { get; set; }
+
     public FlightBoardViewModel(
         AircraftFeedService feed,
         DispatcherQueue dispatcher,
@@ -86,6 +104,7 @@ public sealed partial class FlightBoardViewModel : ObservableObject
         ProviderAttribution = string.Empty;
         Units = UnitSystem.Aviation;
         RangeKm = 80.0;
+        SelectedTrail = [];
 
         _feed.StateChanged += OnFeedStateChanged;
         Apply(_feed.CurrentState);
