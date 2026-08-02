@@ -75,16 +75,38 @@ it, at the cost of not being able to run two builds at once — arguably correct
 given the shared database, but it is a behaviour change, so it is recorded rather
 than done unilaterally.
 
-### 3. CI has never executed — OPEN
+### 3. CI — the build workflow PASSES; the release workflow was invalid YAML
 
-`.github/workflows/windows-desktop.yml` and `windows-desktop-release.yml` are
-valid YAML and every `dotnet` command in them was proven locally, but **no
-GitHub Actions run has ever executed them**. The pinned action versions
-(`checkout@v7`, `setup-dotnet@v5`, `upload-artifact@v7`) were matched to the
-repo's existing convention and have not been resolved against the registry.
-Expect the first run to need adjustment.
+**Corrected 2026-08-02.** The claim that CI had never executed was wrong. It had:
+the **`Windows desktop` workflow ran on `917da49` and succeeded**, so the build,
+tests and packaging are all green on `windows-latest`, and the pinned action
+versions resolve.
 
-### 3. No UI automation tests — OPEN
+The **release workflow had never once been valid.** Every push produced a failed
+run with **no jobs** and the *filename* as its name instead of
+`Windows desktop release` — GitHub's signature for a file it could not parse.
+The cause:
+
+```yaml
+if: ${{ secrets.WINDOWS_CERT_BASE64 != '' }}   # not allowed
+```
+
+The **`secrets` context is not permitted in an `if` condition.** It is a
+validation error, and one invalid expression invalidates the entire file, which
+is why the failure looked like nothing at all rather than a build error. The
+comment above that line shows the author had already worked out that a step's own
+`env` is not available to its own `if`, and reached for `secrets` instead — which
+is disallowed for a different reason.
+
+Fixed by promoting the secret to a **job-level `env`** (which may reference
+secrets) and testing `env.CERT_BASE64` in the `if` (which is permitted).
+
+**Still unverified:** the release workflow has never completed a run, because it
+only triggers on a `windows-desktop-v*` tag. Nothing downstream of the version
+resolution step — MSIX packaging, signing, artifact upload, release creation —
+has ever executed. Cutting the first tag should be treated as a test.
+
+### 4. No UI automation tests — OPEN
 
 There is no test project for `OpenFlightDisplay.App`. View models and controls
 are exercised only by running the app. The domain, providers, persistence and

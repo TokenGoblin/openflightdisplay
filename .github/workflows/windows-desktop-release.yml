@@ -31,6 +31,17 @@ jobs:
     name: Package ${{ matrix.platform }}
     runs-on: windows-latest
 
+    # Promoted to job level so the signing step can test it in an `if`.
+    #
+    # The `secrets` context is NOT permitted in an `if` condition — using it
+    # there is a workflow *validation* error, which invalidates the whole file.
+    # GitHub then reports a run with no jobs, named after the filename rather
+    # than the workflow, which is what this file did on every push until
+    # 2026-08-02. A job-level `env` may reference secrets, and `env` IS
+    # available to a step's `if`, so the value comes in here and is tested below.
+    env:
+      CERT_BASE64: ${{ secrets.WINDOWS_CERT_BASE64 }}
+
     strategy:
       fail-fast: false
       matrix:
@@ -82,11 +93,10 @@ jobs:
 
       - name: Import signing certificate
         id: cert
-        # The secrets context, not env: a step's own env is not available to its
-        # own if condition, so gating on it would have silently never run.
-        if: ${{ secrets.WINDOWS_CERT_BASE64 != '' }}
-        env:
-          CERT_BASE64: ${{ secrets.WINDOWS_CERT_BASE64 }}
+        # Tests the JOB-level env declared above, not `secrets` and not a
+        # step-level env — a step's own env is not available to its own `if`
+        # either. See the comment on the job's env block.
+        if: env.CERT_BASE64 != ''
         shell: pwsh
         run: |
           # Written to the runner's temp directory, never the workspace, so it
