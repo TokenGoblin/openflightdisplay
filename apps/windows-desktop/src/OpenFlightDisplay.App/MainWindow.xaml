@@ -45,17 +45,26 @@
                 headline text rather than by colour alone.
             -->
             <Border
+                x:Name="StatusBanner"
                 Grid.Row="0"
                 Padding="16,10"
                 Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
                 BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                 BorderThickness="0,0,0,1">
-                <StackPanel Orientation="Horizontal" Spacing="12">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
                     <muxc:ProgressRing
+                        Grid.Column="0"
                         IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}"
                         Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay}"
                         Width="16" Height="16" VerticalAlignment="Center" />
-                    <StackPanel>
+
+                    <StackPanel Grid.Column="1">
                         <TextBlock
                             Text="{x:Bind ViewModel.StatusHeadline, Mode=OneWay}"
                             FontWeight="SemiBold"
@@ -65,7 +74,15 @@
                             FontSize="12" TextWrapping="Wrap"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     </StackPanel>
-                </StackPanel>
+
+                    <Button
+                        Grid.Column="2"
+                        x:Name="CompactButton"
+                        Content="Compact"
+                        VerticalAlignment="Center"
+                        Click="OnToggleCompact"
+                        ToolTipService.ToolTip="Shrink to a small always-on-top window showing the nearest aircraft" />
+                </Grid>
             </Border>
 
             <!-- Content -->
@@ -235,6 +252,50 @@
                             </DataTemplate>
                         </ListView.ItemTemplate>
                     </ListView>
+                </Grid>
+
+                <!--
+                    Compact mode. Its own page rather than a second window: one
+                    window means one feed, one history connection and one place
+                    for the tracked flight to live.
+                -->
+                <Grid x:Name="CompactPage" Visibility="Collapsed" Padding="14,10" ColumnSpacing="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock
+                            x:Name="CompactHeadline"
+                            FontSize="18" FontWeight="SemiBold"
+                            TextTrimming="CharacterEllipsis" />
+                        <TextBlock
+                            x:Name="CompactDetail"
+                            FontSize="12" TextTrimming="CharacterEllipsis"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBlock
+                            x:Name="CompactTracked"
+                            FontSize="12" TextTrimming="CharacterEllipsis"
+                            Visibility="Collapsed"
+                            Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                        <TextBlock
+                            x:Name="CompactAttribution"
+                            FontSize="11"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                            Text="{x:Bind ViewModel.ProviderAttribution, Mode=OneWay}" />
+                    </StackPanel>
+
+                    <!--
+                        The only way out of compact mode: the status banner that
+                        normally carries the toggle is hidden here, so this
+                        button must exist or the window cannot be restored.
+                    -->
+                    <Button
+                        Grid.Column="1"
+                        Content="Expand"
+                        VerticalAlignment="Center"
+                        Click="OnToggleCompact" />
                 </Grid>
 
                 <!-- Monitoring Areas -->
@@ -830,6 +891,7 @@
 
             <!-- Attribution: the active provider is always visible, never implicit. -->
             <Border
+                x:Name="AttributionBar"
                 Grid.Row="2" Padding="16,8"
                 Background="{ThemeResource LayerFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
