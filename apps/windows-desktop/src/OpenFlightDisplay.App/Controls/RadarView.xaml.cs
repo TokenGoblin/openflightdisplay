@@ -31,7 +31,7 @@ using Windows.Foundation;
 /// fixed to the monitoring radius.
 /// </para>
 /// </remarks>
-public sealed partial class RadarView : UserControl, IDisposable
+public sealed partial class RadarView : UserControl
 {
     /// <summary>Aircraft to plot.</summary>
     public static readonly DependencyProperty AircraftProperty =
@@ -127,8 +127,8 @@ public sealed partial class RadarView : UserControl, IDisposable
     /// </remarks>
     public MapTileCache? Tiles { get; set; }
 
-    /// <summary>Cancels an in-flight map draw when a newer one starts.</summary>
-    private CancellationTokenSource? _mapCts;
+    /// <summary>Identifies the current map draw so superseded ones can stop.</summary>
+    private int _mapGeneration;
 
     /// <summary>
     /// The geometry the current backdrop was drawn for.
@@ -146,17 +146,6 @@ public sealed partial class RadarView : UserControl, IDisposable
     private bool _redrawPending;
 
     public RadarView() => InitializeComponent();
-
-    /// <inheritdoc/>
-    /// <remarks>
-    /// Only the map's cancellation source needs releasing; the control itself is
-    /// owned by the visual tree.
-    /// </remarks>
-    public void Dispose()
-    {
-        _mapCts?.Dispose();
-        _mapCts = null;
-    }
 
     /// <summary>Forces an immediate redraw, for changes the plot cannot observe.</summary>
     /// <remarks>
@@ -418,48 +407,48 @@ public sealed partial class RadarView : UserControl, IDisposable
 
         _mapDrawnFor = wanted;
 
-        // A newer draw supersedes an older one; without this a slow fetch from
-        // the previous geometry could land on top of the current backdrop.
-        if (_mapCts is not null)
-        {
-            await _mapCts.CancelAsync();
-            _mapCts.Dispose();
-        }
-
-        _mapCts = new CancellationTokenSource();
-        CancellationToken token = _mapCts.Token;
+        // A generation counter, deliberately NOT a CancellationTokenSource.
+        //
+        // This method is async void and re-entrant: every poll can start another
+        // one. The first version cancelled and disposed the previous draw's
+        // token source, and when that older draw resumed from its await it
+        // touched a disposed token and threw ObjectDisposedException. An
+        // exception escaping an async void method on the UI thread takes the
+        // whole process down, which is exactly what it did - intermittently,
+        // because it needed a redraw to land while a fetch was in flight.
+        //
+        // A superseded draw now simply stops. In-flight fetches are left to
+        // finish, which costs nothing: their result lands in the tile cache and
+        // the next draw picks it up from disk.
+        int generation = ++_mapGeneration;
 
         IReadOnlyList<TilePlacement> placements = SlippyMap.Cover(
             ObserverLatitude, ObserverLongitude, SurfaceWidth, SurfaceHeight, metresPerPixel);
 
         MapCanvas.Children.Clear();
 
-        foreach (TilePlacement placement in placements)
+        try
         {
-            string? path;
-            try
+            foreach (TilePlacement placement in placements)
             {
-                path = await Tiles.GetTileAsync(placement.Tile, token).ConfigureAwait(true);
-            }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
+                string? path = await Tiles
+                    .GetTileAsync(placement.Tile, CancellationToken.None)
+                    .ConfigureAwait(true);
 
-            if (token.IsCancellationRequested)
-            {
-                return;
-            }
+                // Superseded while we were awaiting: the canvas now belongs to a
+                // newer draw and must not be touched.
+                if (generation != _mapGeneration)
+                {
+                    return;
+                }
 
-            if (path is null)
-            {
-                // A missing tile leaves a gap rather than a placeholder. An
-                // invented tile would misrepresent the ground.
-                continue;
-            }
+                if (path is null)
+                {
+                    // A missing tile leaves a gap rather than a placeholder. An
+                    // invented tile would misrepresent the ground.
+                    continue;
+                }
 
-            try
-            {
                 var image = new Image
                 {
                     Source = new BitmapImage(new Uri(path)),
@@ -472,12 +461,16 @@ public sealed partial class RadarView : UserControl, IDisposable
                 Canvas.SetTop(image, placement.Top);
                 MapCanvas.Children.Add(image);
             }
-#pragma warning disable CA1031 // A bad tile must not take the radar down.
-            catch (Exception)
+        }
+#pragma warning disable CA1031 // Nothing here is worth killing the application for.
+        catch (Exception)
 #pragma warning restore CA1031
-            {
-                // A corrupt cached image. Skipping it costs one tile.
-            }
+        {
+            // A corrupt cached tile, a vanished file, a decode failure. The
+            // backdrop is decoration; the rings and symbols are the instrument
+            // and are already drawn. Swallowing here is what stops an async void
+            // method turning a cosmetic problem into a dead process.
+            _mapDrawnFor = default;
         }
     }
 

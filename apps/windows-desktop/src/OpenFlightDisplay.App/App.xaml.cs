@@ -22,6 +22,17 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
+
+        // An exception escaping an async void method on the UI thread kills the
+        // process outright: no dialog, no window, nothing in the event log
+        // beyond a stowed-exception code. That is exactly how a map-tile race
+        // presented - as "it froze on launch" - and it cost a debugging session.
+        //
+        // This does not make the app limp on after a genuine bug. It makes the
+        // bug say what it was on the way out, which is the whole point of the
+        // no-silent-failure rule.
+        UnhandledException += OnUnhandledException;
+
         Services = ConfigureServices();
     }
 
@@ -33,6 +44,43 @@ public partial class App : Application
     {
         _window = new MainWindow(Services);
         _window.Activate();
+    }
+
+    /// <summary>
+    /// Records an unhandled exception before the process goes away.
+    /// </summary>
+    /// <remarks>
+    /// Written to a file as well as the debugger, because the failure this
+    /// exists to catch happens when nobody is attached — the user simply reports
+    /// that the application will not start.
+    /// </remarks>
+    private void OnUnhandledException(
+        object sender,
+        Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+    {
+        try
+        {
+            string path = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "OpenFlightDisplay",
+                "crash.log");
+
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+
+            File.AppendAllText(
+                path,
+                $"=== {DateTimeOffset.Now:O} ==={Environment.NewLine}" +
+                $"{e.Message}{Environment.NewLine}" +
+                $"{e.Exception}{Environment.NewLine}{Environment.NewLine}");
+
+            System.Diagnostics.Debug.WriteLine($"UNHANDLED: {e.Exception}");
+        }
+#pragma warning disable CA1031 // Reporting a crash must not cause another one.
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+            // Nothing useful left to do; the process is going down regardless.
+        }
     }
 
     private static ServiceProvider ConfigureServices()
