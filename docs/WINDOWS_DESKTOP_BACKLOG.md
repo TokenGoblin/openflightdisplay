@@ -58,7 +58,24 @@ Genuinely untested, and the honest remainder of this item: monitors with
 *different* scale factors (`WM_DPICHANGED`). Only single-monitor 150% is
 verified.
 
-### 2. CI has never executed — OPEN
+### 2. Single instance does not span builds — OPEN, low impact
+
+Observed 2026-08-01. Single-instance registration for an unpackaged app is keyed
+to the **executable path**, so a Debug build and a Release build run side by side
+rather than one redirecting to the other. Launching the same build twice
+redirects correctly, verified.
+
+Both then write to the same `%APPDATA%\OpenFlightDisplay\history.db`, which is
+precisely the interleaving `Program.cs` exists to prevent. A user with one
+install cannot hit this; a developer switching between builds can, and both
+windows look identical.
+
+A named mutex on a fixed string alongside the `AppInstance` redirect would close
+it, at the cost of not being able to run two builds at once — arguably correct
+given the shared database, but it is a behaviour change, so it is recorded rather
+than done unilaterally.
+
+### 3. CI has never executed — OPEN
 
 `.github/workflows/windows-desktop.yml` and `windows-desktop-release.yml` are
 valid YAML and every `dotnet` command in them was proven locally, but **no

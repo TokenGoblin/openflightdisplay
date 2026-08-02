@@ -32,6 +32,24 @@ Get-Process OpenFlightDisplay.App -ErrorAction SilentlyContinue | Stop-Process -
 This caught out two separate sessions. Check Task Manager before concluding a
 rebuild did not take effect.
 
+### Two copies really can run at once — but only different builds
+
+Single-instance registration for an **unpackaged** app is keyed to the
+executable path, so a `bin\x64\Debug\...` build and a `bin\x64\Release\...` build
+are two different identities and will happily run side by side. Launching the
+*same* build twice redirects correctly and the second exits with code 0.
+
+This matters because both write to the same `%APPDATA%\OpenFlightDisplay\history.db`
+— which is the exact interleaving that single-instance was added to prevent.
+Users with one install cannot hit it; developers switching between Debug and
+Release can, and it is easy to miss because both windows look identical.
+
+Kill *all* of them, not the one you were looking at:
+
+```powershell
+Get-Process OpenFlightDisplay.App | Stop-Process -Force
+```
+
 ## The app exits immediately with no window
 
 Look at the exit code. `-1073741189` is `0xC000027B`, a **stowed WinRT
