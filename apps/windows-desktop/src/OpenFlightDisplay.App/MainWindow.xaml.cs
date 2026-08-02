@@ -1,4 +1,4 @@
-namespace OpenFlightDisplay.App;
+﻿namespace OpenFlightDisplay.App;
 
 using System.ComponentModel;
 using System.Globalization;
@@ -33,7 +33,7 @@ using WinRT.Interop;
 public sealed partial class MainWindow : Window, IDisposable
 {
     // Fallback observer location, used only until a real one is configured.
-    // Deliberately a well-known public coordinate and NOT anyone's home — the
+    // Deliberately a well-known public coordinate and NOT anyone's home â€” the
     // privacy rules forbid committing a real location.
     private const double FallbackLat = 47.6062;
     private const double FallbackLon = -122.3321;
@@ -108,9 +108,28 @@ public sealed partial class MainWindow : Window, IDisposable
     /// <summary>Bound by the XAML.</summary>
     public FlightBoardViewModel ViewModel { get; }
 
+    /// <summary>
+    /// Runs an async event handler without letting a failure kill the process.
+    /// </summary>
+    /// <remarks>
+    /// Every <c>async void</c> handler in this window goes through here. An
+    /// exception escaping one terminates the application with no message at all
+    /// â€” see <see cref="SafeHandler"/>. The discard is deliberate: the returned
+    /// task is already guarded, and awaiting it would just move the problem.
+    /// </remarks>
+    private void Safe(Func<Task> action)
+        => _ = SafeHandler.RunAsync(action, ReportHandlerFailure);
+
+    /// <summary>Shows a handler failure without disturbing the feed status.</summary>
+    private void ReportHandlerFailure(string message)
+    {
+        HandlerError.Message = message;
+        HandlerError.IsOpen = true;
+    }
+
     private async void OnContentLoaded(object sender, RoutedEventArgs e)
     {
-        // Once only — Loaded can fire again on theme or visual-tree changes.
+        // Once only â€” Loaded can fire again on theme or visual-tree changes.
         if (Content is FrameworkElement root)
         {
             root.Loaded -= OnContentLoaded;
@@ -195,7 +214,7 @@ public sealed partial class MainWindow : Window, IDisposable
     /// </summary>
     /// <remarks>
     /// Skipping is allowed and leaves the defaults in place, which are working
-    /// mock data — first run must not be a locked door. Skipping deliberately
+    /// mock data â€” first run must not be a locked door. Skipping deliberately
     /// does <b>not</b> mark onboarding complete, so it is offered again next
     /// launch rather than silently never appearing.
     /// </remarks>
@@ -339,7 +358,7 @@ public sealed partial class MainWindow : Window, IDisposable
     /// Opens or closes the history database to match the current setting.
     /// </summary>
     /// <remarks>
-    /// History is opt-in, so the database is not even opened unless it is on —
+    /// History is opt-in, so the database is not even opened unless it is on â€”
     /// turning it off should stop creating files, not merely stop writing to
     /// them. A failure to open is reported and leaves history disabled rather
     /// than taking the application down.
@@ -400,7 +419,7 @@ public sealed partial class MainWindow : Window, IDisposable
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Rules are evaluated whether or not notifications are enabled — the master
+    /// Rules are evaluated whether or not notifications are enabled â€” the master
     /// switch governs Windows toasts, not whether alerts happen. Turning it off
     /// used to install no rules at all, which meant the in-app alert list stayed
     /// permanently empty and nothing recorded that anything had been observed.
@@ -432,15 +451,18 @@ public sealed partial class MainWindow : Window, IDisposable
 
     // ---- alert rule editing ----
 
-    private async void OnAddAlertRule(object sender, RoutedEventArgs e)
-        => await EditRuleAsync(null).ConfigureAwait(true);
+    // ContentDialog.ShowAsync throws if another dialog is already open, which
+    // is reachable by double-clicking either of these buttons. Before the guard
+    // that closed the application.
+    private void OnAddAlertRule(object sender, RoutedEventArgs e)
+        => Safe(() => EditRuleAsync(null));
 
-    private async void OnEditAlertRule(object sender, RoutedEventArgs e)
+    private void OnEditAlertRule(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement { Tag: string id }
             && _settings.EffectiveAlertRules.FirstOrDefault(r => r.Id == id) is { } existing)
         {
-            await EditRuleAsync(existing).ConfigureAwait(true);
+            Safe(() => EditRuleAsync(existing));
         }
     }
 
@@ -477,7 +499,7 @@ public sealed partial class MainWindow : Window, IDisposable
         await SaveRulesAsync(rules).ConfigureAwait(true);
     }
 
-    private async void OnDeleteAlertRule(object sender, RoutedEventArgs e)
+    private void OnDeleteAlertRule(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement { Tag: string id })
         {
@@ -485,10 +507,13 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         var rules = _settings.EffectiveAlertRules.Where(r => r.Id != id).ToList();
-        await SaveRulesAsync(rules).ConfigureAwait(true);
+        Safe(() => SaveRulesAsync(rules));
     }
 
-    private async void OnAlertRuleToggled(object sender, RoutedEventArgs e)
+    private void OnAlertRuleToggled(object sender, RoutedEventArgs e)
+        => Safe(() => ToggleAlertRuleAsync(sender));
+
+    private async Task ToggleAlertRuleAsync(object sender)
     {
         if (sender is not ToggleSwitch { Tag: string id } toggle
             || _settings.EffectiveAlertRules.FirstOrDefault(r => r.Id == id) is not { } rule)
@@ -545,7 +570,7 @@ public sealed partial class MainWindow : Window, IDisposable
         double lon = _settings.HomeLongitude ?? FallbackLon;
 
         // The configured shape, falling back to the plain radius circle if it
-        // cannot be built — an unusable area must not stop the feed starting.
+        // cannot be built â€” an unusable area must not stop the feed starting.
         MonitoringArea area =
             _settings.MonitoringArea.Build(_settings.HomeLatitude, _settings.HomeLongitude)
             ?? new CircleArea(lat, lon, _settings.MonitoringRadiusKm);
@@ -571,7 +596,7 @@ public sealed partial class MainWindow : Window, IDisposable
         }
         catch (NotSupportedException)
         {
-            // Should be unreachable — unimplemented modes cannot be selected —
+            // Should be unreachable â€” unimplemented modes cannot be selected â€”
             // but falling back silently to mock would present synthetic
             // aircraft as live, so fall back to mock and say so.
             _settings = _settings with { DataMode = DataMode.Mock };
@@ -587,7 +612,7 @@ public sealed partial class MainWindow : Window, IDisposable
         UpdateHistoryStatus();
     }
 
-    private async void OnDataSourceChanged(object sender, SelectionChangedEventArgs e)
+    private void OnDataSourceChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressSelectionEvents
             || SourceList.SelectedItem is not ListViewItem { Tag: DataMode mode })
@@ -595,12 +620,17 @@ public sealed partial class MainWindow : Window, IDisposable
             return;
         }
 
-        _settings = _settings with { DataMode = mode };
-        await _settingsStore.SaveAsync(_settings).ConfigureAwait(true);
-        await RestartFeedAsync().ConfigureAwait(true);
+        // RestartFeedAsync resolves a provider, opens a database and starts a
+        // poll loop. Any of those can throw on a bad configuration.
+        Safe(async () =>
+        {
+            _settings = _settings with { DataMode = mode };
+            await _settingsStore.SaveAsync(_settings).ConfigureAwait(true);
+            await RestartFeedAsync().ConfigureAwait(true);
+        });
     }
 
-    private async void OnUnitsChanged(object sender, SelectionChangedEventArgs e)
+    private void OnUnitsChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressSelectionEvents
             || UnitsBox.SelectedItem is not ComboBoxItem { Tag: string tag }
@@ -609,17 +639,20 @@ public sealed partial class MainWindow : Window, IDisposable
             return;
         }
 
-        _settings = _settings with { Units = system };
-        ViewModel.Units = system;
+        Safe(async () =>
+        {
+            _settings = _settings with { Units = system };
+            ViewModel.Units = system;
 
-        await _settingsStore.SaveAsync(_settings).ConfigureAwait(true);
+            await _settingsStore.SaveAsync(_settings).ConfigureAwait(true);
 
-        // Rows are formatted at construction, so a unit change needs a rebuild
-        // rather than only a property notification.
-        await RestartFeedAsync().ConfigureAwait(true);
+            // Rows are formatted at construction, so a unit change needs a
+            // rebuild rather than only a property notification.
+            await RestartFeedAsync().ConfigureAwait(true);
+        });
     }
 
-    private async void OnRankingChanged(object sender, SelectionChangedEventArgs e)
+    private void OnRankingChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressSelectionEvents
             || RankingBox.SelectedItem is not ComboBoxItem { Tag: string tag }
@@ -628,12 +661,15 @@ public sealed partial class MainWindow : Window, IDisposable
             return;
         }
 
-        _settings = _settings with { RankingMode = mode };
-        await _settingsStore.SaveAsync(_settings).ConfigureAwait(true);
+        Safe(async () =>
+        {
+            _settings = _settings with { RankingMode = mode };
+            await _settingsStore.SaveAsync(_settings).ConfigureAwait(true);
 
-        // Ranking is chosen when the feed starts, so this needs a restart rather
-        // than only a property change.
-        await RestartFeedAsync().ConfigureAwait(true);
+            // Ranking is chosen when the feed starts, so this needs a restart
+            // rather than only a property change.
+            await RestartFeedAsync().ConfigureAwait(true);
+        });
     }
 
     private async void OnHistoryToggled(object sender, RoutedEventArgs e)
@@ -671,7 +707,9 @@ public sealed partial class MainWindow : Window, IDisposable
             $"kept for {_settings.HistoryRetentionDays} days.");
     }
 
-    private async void OnSaveSettings(object sender, RoutedEventArgs e)
+    private void OnSaveSettings(object sender, RoutedEventArgs e) => Safe(SaveSettingsAsync);
+
+    private async Task SaveSettingsAsync()
     {
         SettingsSaved.Visibility = Visibility.Collapsed;
 
@@ -724,7 +762,7 @@ public sealed partial class MainWindow : Window, IDisposable
     /// </summary>
     /// <remarks>
     /// A blank altitude box means "no limit", which is why the fields are
-    /// nullable rather than defaulted — zero feet is a real altitude.
+    /// nullable rather than defaulted â€” zero feet is a real altitude.
     /// </remarks>
     private bool TryReadFilter(out AircraftFilter filter, out string? error)
     {
@@ -783,7 +821,7 @@ public sealed partial class MainWindow : Window, IDisposable
     }
 
     /// <summary>
-    /// Parses the location form. Rejects rather than clamps — a silently
+    /// Parses the location form. Rejects rather than clamps â€” a silently
     /// corrected coordinate is worse than being told it was wrong.
     /// </summary>
     private bool TryReadLocation(
@@ -906,7 +944,7 @@ public sealed partial class MainWindow : Window, IDisposable
     /// Writes the current board to a file the user chooses.
     /// </summary>
     /// <remarks>
-    /// Exports exactly what is on screen — the ranked, filtered list — so the
+    /// Exports exactly what is on screen â€” the ranked, filtered list â€” so the
     /// file matches what the user was looking at when they pressed the button.
     /// </remarks>
     private async void OnExport(object sender, RoutedEventArgs e)
@@ -919,7 +957,7 @@ public sealed partial class MainWindow : Window, IDisposable
         var aircraft = ViewModel.Aircraft.Select(r => r.Aircraft).ToList();
         if (aircraft.Count == 0)
         {
-            ExportStatus.Text = "Nothing to export — no aircraft on the board.";
+            ExportStatus.Text = "Nothing to export â€” no aircraft on the board.";
             return;
         }
 
@@ -1044,7 +1082,7 @@ public sealed partial class MainWindow : Window, IDisposable
             {
                 Text = string.Create(
                     CultureInfo.CurrentCulture,
-                    $"{e.RuleName} · {e.FiredAt.ToLocalTime():HH:mm:ss} · {e.IcaoHex.ToUpperInvariant()}"),
+                    $"{e.RuleName} Â· {e.FiredAt.ToLocalTime():HH:mm:ss} Â· {e.IcaoHex.ToUpperInvariant()}"),
                 FontSize = 12,
                 Foreground = (Microsoft.UI.Xaml.Media.Brush)
                     Application.Current.Resources["TextFillColorSecondaryBrush"],
@@ -1075,7 +1113,7 @@ public sealed partial class MainWindow : Window, IDisposable
         // Disabled while running so a second press cannot queue behind the
         // one-per-second limit and make the app look frozen.
         PlaceSearchButton.IsEnabled = false;
-        PlaceSearchStatus.Text = "Searching…";
+        PlaceSearchStatus.Text = "Searchingâ€¦";
         PlaceResults.Visibility = Visibility.Collapsed;
 
         try
@@ -1348,7 +1386,7 @@ public sealed partial class MainWindow : Window, IDisposable
     /// </summary>
     /// <remarks>
     /// Shows the nearest aircraft, and the tracked flight's departure advice
-    /// when there is one — the two things worth a window that sits on top of
+    /// when there is one â€” the two things worth a window that sits on top of
     /// everything else.
     /// </remarks>
     private void RefreshCompact()
@@ -1370,7 +1408,7 @@ public sealed partial class MainWindow : Window, IDisposable
             CompactHeadline.Text = nearest.Callsign;
             CompactDetail.Text = string.Create(
                 CultureInfo.CurrentCulture,
-                $"{nearest.Distance} · {nearest.Altitude} · {ViewModel.Aircraft.Count:N0} in range");
+                $"{nearest.Distance} Â· {nearest.Altitude} Â· {ViewModel.Aircraft.Count:N0} in range");
         }
 
         if (_tracking.CurrentState is { } tracked
@@ -1476,7 +1514,9 @@ public sealed partial class MainWindow : Window, IDisposable
             : Visibility.Visible;
     }
 
-    private async void OnSaveArea(object sender, RoutedEventArgs e)
+    private void OnSaveArea(object sender, RoutedEventArgs e) => Safe(SaveAreaAsync);
+
+    private async Task SaveAreaAsync()
     {
         if (!TryReadArea(out MonitoringAreaSetting area, out string? error))
         {
@@ -1601,7 +1641,7 @@ public sealed partial class MainWindow : Window, IDisposable
     /// Parses the polygon outline.
     /// </summary>
     /// <remarks>
-    /// Names the offending line rather than reporting a general failure — a
+    /// Names the offending line rather than reporting a general failure â€” a
     /// sixty-point outline with one typo is otherwise miserable to correct.
     /// </remarks>
     private static bool TryReadVertices(
@@ -1649,8 +1689,8 @@ public sealed partial class MainWindow : Window, IDisposable
     /// Rebuilds the diagnostics readout.
     /// </summary>
     /// <remarks>
-    /// Counters that are supposed to be zero — dropped history batches, dropped
-    /// replay frames — are surfaced in a warning bar rather than left as one
+    /// Counters that are supposed to be zero â€” dropped history batches, dropped
+    /// replay frames â€” are surfaced in a warning bar rather than left as one
     /// number among many. A silent drop is exactly the kind of failure this
     /// project's no-silent-failure rule exists to catch, and it is no use
     /// recording one if nothing ever says so.
@@ -1849,8 +1889,8 @@ public sealed partial class MainWindow : Window, IDisposable
     /// Points the feed at whichever recorders are currently active.
     /// </summary>
     /// <remarks>
-    /// History and session recording are independent — capturing a session to
-    /// reproduce a bug should not mean giving up the history database — so both
+    /// History and session recording are independent â€” capturing a session to
+    /// reproduce a bug should not mean giving up the history database â€” so both
     /// can be attached at once.
     /// </remarks>
     private void ApplyRecorders()
@@ -1864,7 +1904,9 @@ public sealed partial class MainWindow : Window, IDisposable
     }
 
     /// <summary>Opens a recording and switches the feed to replaying it.</summary>
-    private async void OnLoadRecording(object sender, RoutedEventArgs e)
+    private void OnLoadRecording(object sender, RoutedEventArgs e) => Safe(LoadRecordingAsync);
+
+    private async Task LoadRecordingAsync()
     {
         string? path = await PickRecordingAsync().ConfigureAwait(true);
         if (path is null)
@@ -1958,8 +2000,8 @@ public sealed partial class MainWindow : Window, IDisposable
     /// </summary>
     /// <remarks>
     /// Says which of the three "nothing to show" cases applies. They need
-    /// different actions from the user — turn history on, wait for data, or
-    /// widen the period — and an identical empty list for all three would leave
+    /// different actions from the user â€” turn history on, wait for data, or
+    /// widen the period â€” and an identical empty list for all three would leave
     /// them guessing which.
     /// </remarks>
     private void RefreshHistory()
@@ -2085,9 +2127,12 @@ public sealed partial class MainWindow : Window, IDisposable
     /// <remarks>
     /// Confirmed first and irreversible, so it says so. History is opt-in
     /// because of what it records, which is the same reason deleting it has to
-    /// be possible — switching recording off only stops new rows.
+    /// be possible â€” switching recording off only stops new rows.
     /// </remarks>
-    private async void OnDeleteHistory(object sender, RoutedEventArgs e)
+    private void OnDeleteHistory(object sender, RoutedEventArgs e)
+        => Safe(DeleteHistoryAsync);
+
+    private async Task DeleteHistoryAsync()
     {
         if (_historyStore is null)
         {
@@ -2143,11 +2188,13 @@ public sealed partial class MainWindow : Window, IDisposable
     /// </summary>
     /// <remarks>
     /// Both identifiers are validated before anything is started. A wrong flight
-    /// number is indistinguishable from one that has not pushed back — both
-    /// report "waiting for contact" forever — so catching a malformed one here
+    /// number is indistinguishable from one that has not pushed back â€” both
+    /// report "waiting for contact" forever â€” so catching a malformed one here
     /// is the only chance to tell the user it was their input that was wrong.
     /// </remarks>
-    private async void OnStartTracking(object sender, RoutedEventArgs e)
+    private void OnStartTracking(object sender, RoutedEventArgs e) => Safe(StartTrackingAsync);
+
+    private async Task StartTrackingAsync()
     {
         if (FlightTracking.NormalizeFlightIdentifier(TrackCallsignBox.Text) is not { } callsign)
         {
@@ -2158,7 +2205,7 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         // Blank is allowed and means "follow it, but I am not collecting
-        // anyone" — position without an ETA. A non-blank code must be valid.
+        // anyone" â€” position without an ETA. A non-blank code must be valid.
         string? destination = null;
         if (!string.IsNullOrWhiteSpace(TrackDestinationBox.Text))
         {
@@ -2202,7 +2249,9 @@ public sealed partial class MainWindow : Window, IDisposable
             .ConfigureAwait(true);
     }
 
-    private async void OnStopTracking(object sender, RoutedEventArgs e)
+    private void OnStopTracking(object sender, RoutedEventArgs e) => Safe(StopTrackingAsync);
+
+    private async Task StopTrackingAsync()
     {
         await _tracking.StopAsync().ConfigureAwait(true);
 
@@ -2268,7 +2317,7 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         TrackStatusCard.Visibility = Visibility.Visible;
         TrackFlightLabel.Text = state.Destination is { } airport
-            ? $"{state.Callsign} → {airport.Name ?? airport.Icao}"
+            ? $"{state.Callsign} â†’ {airport.Name ?? airport.Icao}"
             : state.Callsign;
 
         TrackPhase.Text = FlightTracking.PhaseWord(state.Progress.Phase);
@@ -2279,7 +2328,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 CultureInfo.CurrentCulture,
                 $"{UnitConverter.DistanceFromKm(km, _settings.Units):N0} " +
                 $"{UnitConverter.DistanceUnitLabel(_settings.Units)}")
-            : "—";
+            : "â€”";
 
         RenderDepartureAdvice(state);
 
@@ -2297,7 +2346,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 CultureInfo.CurrentCulture,
                 $"Last position report {state.Progress.SecondsSinceContact}s ago, at {seen.ToLocalTime():HH:mm:ss}.")
             : "No position report yet. Before pushback the transponder is off, so this is "
-                + "normal — and it also looks exactly like a flight number that does not exist.";
+                + "normal â€” and it also looks exactly like a flight number that does not exist.";
 
         if (state.DestinationIssue is { } destinationIssue)
         {
@@ -2358,7 +2407,7 @@ public sealed partial class MainWindow : Window, IDisposable
     /// <para>
     /// Only the two advice levels a user can act on. The service raises this on
     /// change rather than per poll, so an approach produces one "leave soon" and
-    /// one "leave now" instead of one every ten seconds — a countdown that
+    /// one "leave now" instead of one every ten seconds â€” a countdown that
     /// notified continuously would be muted long before it mattered.
     /// </para>
     /// <para>
@@ -2385,7 +2434,7 @@ public sealed partial class MainWindow : Window, IDisposable
             ? $"{state.Callsign} arrives in about " +
                 $"{FlightTracking.FormatMinutesRemaining(state.Progress.MinutesRemaining)} min. " +
                 "Leave now."
-            : $"{state.Callsign} — leave in about {minutes} minutes.";
+            : $"{state.Callsign} â€” leave in about {minutes} minutes.";
 
         if (!DispatcherQueue.TryEnqueue(() =>
             _notifier?.Show(FlightTracking.AdviceWord(state.Departure.Advice), message)))
@@ -2506,3 +2555,4 @@ public sealed partial class MainWindow : Window, IDisposable
         }
     }
 }
+

@@ -948,6 +948,21 @@
                 </ScrollViewer>
 
                 <!--
+                    Application-level failure reporting. Overlays whatever page
+                    is showing, because a handler can fail on any of them, and a
+                    failure that had nowhere to appear is how an async void
+                    exception used to end the process instead.
+                -->
+                <InfoBar
+                    x:Name="HandlerError"
+                    IsOpen="False"
+                    IsClosable="True"
+                    Severity="Error"
+                    Title="Something went wrong"
+                    VerticalAlignment="Top"
+                    Margin="16,8" />
+
+                <!--
                     Pages that are genuinely not built yet say so plainly, with
                     the phase they are planned for. A blank page implying work
                     that does not exist would be worse than an honest note.
