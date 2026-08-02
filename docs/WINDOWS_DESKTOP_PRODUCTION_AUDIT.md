@@ -123,7 +123,7 @@ Track Flight page's "no distance" placeholder, which rendered as `â€”` inst
 All 31 repaired and confirmed in the running UI, which now reports `U+2014`.
 Worth noting the XAML files were clean; only the C# was affected.
 
-### B3. The WinUI layer has zero tests — HIGH
+### B3. The WinUI layer had zero tests — FIXED 2026-08-02
 
 | Project | Source files | Test files |
 |---|---|---|
@@ -137,11 +137,27 @@ Every bug that reached the user this session lived in the App layer: the
 `ComboBoxItem.IsSelected` startup crash, the map tile race, the clipped compact
 panel. The layers with tests produced none.
 
-Not all of it is testable without a UI harness, but the view models and the
-zoom-ladder logic are plain classes and are not tested at all.
+**Fixed.** `OpenFlightDisplay.App.Tests` — **37 tests**, taking the suite to
+**473**. A test project *can* reference the WinUI app and run under `dotnet test`,
+which was the open question; it works as long as no WinUI type is instantiated.
 
-**Fix:** an `OpenFlightDisplay.App.Tests` project covering view models, then
-extract testable logic out of the code-behind as B2 proceeds.
+| Covered | Tests | Why it matters |
+|---|---|---|
+| `AircraftFeedService` | 11 | The whole pipeline — poll, area filter, display filter, ranking, recording, alerts, publish — and every failure state the UI renders differently |
+| `AircraftRowViewModel` | 12 | The last place nullable-means-not-reported can be broken. Pins both halves: an unreported value never prints as zero, **and** a reported zero still prints as zero |
+| `SafeHandler` | 7 | The async-void guard. Pins that a failure is contained *and* reported — either alone is a worse outcome |
+| Recorder fan-out | 5 | A full history queue must not silently cost a replay recording |
+| Provider registry, misc | 2 | |
+
+**Deliberately out of scope:** controls, dialogs, and anything needing a
+`XamlRoot` or `DispatcherQueue`. Those need a running application, and are
+covered instead by driving the real app through UI Automation — which is how the
+compact panel, the alert editor and the accessibility audit were checked. The
+project header says so, so nobody later mistakes the gap for an oversight.
+
+`FlightBoardViewModel` remains untested because its constructor requires a
+`DispatcherQueue`. Making it testable means abstracting that, which is a design
+change rather than a test, and is not done.
 
 ---
 
@@ -207,15 +223,27 @@ release:
 
 ---
 
-## Recommended order
+## Progress
 
-1. **B1** — the async void safety net. Highest risk reduction per hour, and it
-   stops the failure mode the user has already seen twice.
-2. **B2** — split `MainWindow`. Unblocks B3 and makes everything after it easier.
-3. **B3** — an App test project, starting with view models.
-4. **CI** — push and let it run. Everything below depends on knowing the build is
-   reproducible off this machine.
-5. **O1** — try the 38 MB trim, with a revert path.
-6. Signing, versioning, licence notices.
+- ~~**B1** async void safety net~~ — done for the twelve handlers that can throw
+- ~~**B2** split `MainWindow`~~ — 2,133 → 928 lines across eight partials
+- ~~**B2a** 31 mojibake sequences~~ — found by B2, five were user-visible
+- ~~**B3** App test project~~ — 37 tests, suite now 473
+- ~~**CI**~~ — pushed. `Windows desktop` is **green**; the release workflow was
+  invalid YAML and is fixed but still unexercised
 
-O2 and O3 are ten-minute jobs and can be done whenever.
+## Remaining, in order
+
+1. **Cut a `windows-desktop-v*` tag.** Nothing past version resolution in the
+   release workflow has ever run — not MSIX packaging, signing, artifact upload
+   or release creation. Treat the first tag as a test.
+2. **Code signing.** Without it the MSIX cannot be installed without the user
+   hand-trusting a certificate, which is not a shippable experience.
+3. **O1** — the 38 MB ONNX/DirectML trim, with a revert path.
+4. **Versioning and a changelog.** Still hardcoded `0.1.0.0`.
+5. **Licence and third-party notices in the app.** It now uses OpenStreetMap
+   data and shows no notices beyond the map attribution.
+6. **O2** the stale nested `publish` folder, **O3** `ConfigureAwait` in library
+   code. Ten-minute jobs.
+7. Sleep/resume, multi-hour soak, mixed-DPI multi-monitor, ARM64 runtime — all
+   still unknown rather than known-good.

@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Tests for the application layer.
+
+    Every bug that reached a user during development lived in this layer - a
+    startup crash from a XAML-parse-time event, a map tile race that killed the
+    process, a clipped compact panel - while the layers that had tests produced
+    none. That asymmetry is the reason this project exists.
+
+    It targets the same Windows TFM as the app because it references it. What it
+    does NOT do is try to instantiate WinUI types: controls, dialogs and anything
+    needing a XamlRoot or a DispatcherQueue require a running application and are
+    out of scope here. Those are covered by driving the real app through UI
+    Automation, which is how the compact panel and the alert editor were checked.
+
+    In scope: the pipeline (AircraftFeedService), the view models that format
+    aircraft for display, the async-void guard, and the recorder fan-out. All are
+    plain classes with no UI dependency.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>OpenFlightDisplay.App.Tests</RootNamespace>
+    <Platforms>x64;ARM64</Platforms>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+
+    <!--
+      The app is a self-contained WinExe. A test project must not inherit that:
+      it needs to be a library the test host can load, not a second executable.
+    -->
+    <SelfContained>false</SelfContained>
+    <OutputType>Library</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\OpenFlightDisplay.App\OpenFlightDisplay.App.csproj" />
+  </ItemGroup>
+
+</Project>
