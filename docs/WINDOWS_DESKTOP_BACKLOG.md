@@ -186,7 +186,9 @@ The engines exist and are tested; these are the missing surfaces.
   factors and confirm `WM_DPICHANGED` is handled. Single-monitor 150% is verified;
   this is not
 - Multi-hour soak. Memory is flat over ~45 s at 1,000 aircraft; longer is unknown
-- Screenshots and a troubleshooting guide
+- ~~Screenshots and a troubleshooting guide~~ **DONE** —
+  `docs/WINDOWS_DESKTOP_TROUBLESHOOTING.md`, with five real screenshots. Every
+  symptom in it actually happened during development
 - Cosmetic: the outermost ring label sits on top of the `N` cardinal mark — both
   are drawn near `CentreX` at the top of the plot. Visible in every radar
   capture. Not a scaling problem; the two labels just need offsetting
