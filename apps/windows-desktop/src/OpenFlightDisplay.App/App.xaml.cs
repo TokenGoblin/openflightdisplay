@@ -123,6 +123,17 @@ public partial class App : Application
                 "OpenFlightDisplay-Desktop/0.1 (+https://github.com/TokenGoblin/openflightdisplay)");
         });
 
+        // Nominatim requires an identifying User-Agent as an absolute condition
+        // of use, and rejects requests without one. The per-second rate limit is
+        // enforced inside PlaceSearch rather than trusted to callers.
+        services.AddHttpClient<PlaceSearch>(client =>
+        {
+            client.BaseAddress = new Uri("https://nominatim.openstreetmap.org");
+            client.Timeout = TimeSpan.FromSeconds(15);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd(
+                "OpenFlightDisplay-Desktop/0.1 (+https://github.com/TokenGoblin/openflightdisplay)");
+        });
+
         services.AddSingleton<MockProvider>(_ => new MockProvider());
 
         // Flight tracking always goes to adsb.lol, whatever the radar is using:

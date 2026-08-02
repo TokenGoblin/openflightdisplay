@@ -16,6 +16,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      PlaceSearch.Parse maps a third-party JSON shape, and its edge cases -
+      string coordinates, rows with no position - are worth testing directly
+      rather than only through a stubbed HTTP round trip.
+    -->
+    <InternalsVisibleTo Include="OpenFlightDisplay.Infrastructure.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\OpenFlightDisplay.Core\OpenFlightDisplay.Core.csproj" />
 
     <!--

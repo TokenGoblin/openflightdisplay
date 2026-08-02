@@ -829,6 +829,42 @@
                             FontSize="12" TextWrapping="Wrap"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                             Text="Used only to ask your chosen provider what is nearby. It is never sent anywhere else." />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBox
+                                x:Name="PlaceSearchBox"
+                                Header="Find by postcode or place"
+                                PlaceholderText="98101, or Seattle, or KSEA"
+                                Width="300"
+                                KeyDown="OnPlaceSearchKeyDown" />
+                            <Button
+                                x:Name="PlaceSearchButton"
+                                Content="Search"
+                                VerticalAlignment="Bottom"
+                                Click="OnSearchPlace" />
+                        </StackPanel>
+
+                        <ListView
+                            x:Name="PlaceResults"
+                            Visibility="Collapsed"
+                            MaxHeight="180"
+                            MaxWidth="520"
+                            HorizontalAlignment="Left"
+                            SelectionMode="Single"
+                            SelectionChanged="OnPlaceChosen">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    <Setter Property="Padding" Value="10,6" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                        </ListView>
+
+                        <TextBlock
+                            x:Name="PlaceSearchStatus"
+                            FontSize="12" TextWrapping="Wrap" MaxWidth="520"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                            Text="Optional. Looks the place up with OpenStreetMap and fills in the coordinates below — the search text is sent, nothing else. You can always type coordinates directly." />
+
                         <StackPanel Orientation="Horizontal" Spacing="12">
                             <TextBox x:Name="LatBox" Header="Latitude" Width="160" />
                             <TextBox x:Name="LonBox" Header="Longitude" Width="160" />
