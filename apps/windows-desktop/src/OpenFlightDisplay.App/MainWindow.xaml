@@ -237,6 +237,86 @@
                     </ListView>
                 </Grid>
 
+                <!-- History -->
+                <Grid x:Name="HistoryPage" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Padding="24,20,24,12" Spacing="10">
+                        <TextBlock Text="History" FontSize="22" FontWeight="SemiBold" />
+                        <TextBlock
+                            x:Name="HistorySummary"
+                            TextWrapping="Wrap" MaxWidth="720" HorizontalAlignment="Left"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <ComboBox
+                                x:Name="HistoryRangeBox"
+                                Header="Period"
+                                MinWidth="180"
+                                SelectionChanged="OnHistoryRangeChanged">
+                                <!--
+                                    No IsSelected here. Setting it in markup raises
+                                    SelectionChanged while InitializeComponent is still
+                                    running, so the handler runs against controls that do
+                                    not exist yet and the app dies at startup with a
+                                    stowed E_POINTER. The default is chosen in the
+                                    constructor instead.
+                                -->
+                                <ComboBoxItem Content="Last hour" Tag="1" />
+                                <ComboBoxItem Content="Last 24 hours" Tag="24" />
+                                <ComboBoxItem Content="Last 7 days" Tag="168" />
+                                <ComboBoxItem Content="Last 30 days" Tag="720" />
+                            </ComboBox>
+                            <Button Content="Refresh" Click="OnRefreshHistory" VerticalAlignment="Bottom" />
+                            <Button Content="Delete all history" Click="OnDeleteHistory" VerticalAlignment="Bottom" />
+                        </StackPanel>
+
+                        <TextBlock
+                            x:Name="HistoryStatusLine"
+                            TextWrapping="Wrap" FontSize="12" MaxWidth="720"
+                            HorizontalAlignment="Left"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                    </StackPanel>
+
+                    <ListView
+                        Grid.Row="1"
+                        x:Name="HistoryList"
+                        SelectionMode="Single"
+                        SelectionChanged="OnHistorySelectionChanged">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="Padding" Value="16,8" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:HistoryRowViewModel">
+                                <Grid ColumnSpacing="16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="130" />
+                                        <ColumnDefinition Width="100" />
+                                        <ColumnDefinition Width="110" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{x:Bind Callsign}" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Column="1" Text="{x:Bind IcaoHex}"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Grid.Column="2" Text="{x:Bind Observations}"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Grid.Column="3" Text="{x:Bind Seen}"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <Button Grid.Column="4" Content="Export trail"
+                                            Tag="{x:Bind IcaoHex}" Click="OnExportTrail" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
+
                 <!-- Track Flight -->
                 <ScrollViewer x:Name="TrackPage" Visibility="Collapsed">
                     <StackPanel Padding="24" Spacing="16" MaxWidth="680" HorizontalAlignment="Left">

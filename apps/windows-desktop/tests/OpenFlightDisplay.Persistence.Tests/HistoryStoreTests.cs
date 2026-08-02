@@ -342,6 +342,61 @@ public sealed class HistoryStoreTests : IDisposable
         Assert.Equal(1, reopened.ObservationCount);
     }
 
+    [Fact]
+    public void Deleting_all_history_empties_the_database_and_shrinks_the_file()
+    {
+        // History is opt-in because of what it records, which is the same reason
+        // erasing it has to actually erase it. A DELETE that left the rows in
+        // free pages would report success while the data sat on disk.
+        string path = Path.Combine(_directory, "history.db");
+
+        using (HistoryStore store = Open(path))
+        {
+            for (int i = 0; i < 400; i++)
+            {
+                store.RecordBatch([Aircraft($"a{i:d5}", Now.AddSeconds(i))]);
+            }
+
+            long populatedBytes = store.DatabaseBytes;
+            Assert.Equal(400, store.ObservationCount);
+
+            int deleted = store.DeleteAll();
+
+            Assert.Equal(400, deleted);
+            Assert.Equal(0, store.ObservationCount);
+            Assert.True(
+                store.DatabaseBytes < populatedBytes,
+                $"file did not shrink: {store.DatabaseBytes} was {populatedBytes}");
+        }
+
+        // And it stays gone across a reopen.
+        using HistoryStore reopened = Open(path);
+        Assert.Equal(0, reopened.ObservationCount);
+    }
+
+    [Fact]
+    public void Deleting_all_history_on_an_empty_database_is_harmless()
+    {
+        using HistoryStore store = Open();
+
+        Assert.Equal(0, store.DeleteAll());
+        Assert.Equal(0, store.ObservationCount);
+    }
+
+    [Fact]
+    public void Recording_still_works_after_deleting_everything()
+    {
+        // Deleting history is not the same as turning it off, so the store has
+        // to remain usable rather than needing a reopen.
+        using HistoryStore store = Open();
+        store.RecordBatch([Aircraft("abc123", Now)]);
+        store.DeleteAll();
+
+        store.RecordBatch([Aircraft("def456", Now.AddSeconds(1))]);
+
+        Assert.Equal(1, store.ObservationCount);
+    }
+
     private HistoryStore Open(string? path = null)
         => HistoryStore.Open(
             path ?? Path.Combine(_directory, "history.db"),

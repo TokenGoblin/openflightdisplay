@@ -364,6 +364,37 @@ public sealed partial class HistoryStore : IDisposable
         return deleted;
     }
 
+    /// <summary>
+    /// Deletes every recorded observation.
+    /// </summary>
+    /// <returns>Rows deleted.</returns>
+    /// <remarks>
+    /// <para>
+    /// History is opt-in precisely because it turns a live display into a record
+    /// of everything that flew over someone's house. A feature that can be
+    /// turned on for that reason has to be erasable for the same reason —
+    /// switching recording off only stops new rows, it does not remove the ones
+    /// already there.
+    /// </para>
+    /// <para>
+    /// <b>Vacuums afterwards.</b> A DELETE alone leaves the rows in free pages
+    /// that are still on disk and still recoverable, and leaves the file the
+    /// same size — so the user would be told their history was deleted while the
+    /// file sat there unchanged.
+    /// </para>
+    /// </remarks>
+    public int DeleteAll()
+    {
+        using SqliteCommand command = _connection.CreateCommand();
+        command.CommandText = "DELETE FROM observation;";
+        int deleted = command.ExecuteNonQuery();
+
+        Vacuum();
+
+        LogDeletedAll(_logger, deleted);
+        return deleted;
+    }
+
     private int DeleteOlderThan(DateTimeOffset cutoff)
     {
         using SqliteCommand command = _connection.CreateCommand();
@@ -413,6 +444,12 @@ public sealed partial class HistoryStore : IDisposable
         Level = LogLevel.Warning,
         Message = "Pruning stopped making progress at {ActualBytes} bytes; the {LimitBytes} byte limit is below the database's fixed overhead and cannot be met")]
     private static partial void LogPruneNoProgress(ILogger logger, long actualBytes, long limitBytes);
+
+    [LoggerMessage(
+        EventId = 2100,
+        Level = LogLevel.Information,
+        Message = "Deleted all {Deleted} recorded observations at the user's request")]
+    private static partial void LogDeletedAll(ILogger logger, int deleted);
 }
 
 /// <summary>One recorded position on an aircraft's trail.</summary>

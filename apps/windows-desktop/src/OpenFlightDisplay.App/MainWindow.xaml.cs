@@ -83,6 +83,13 @@ public sealed partial class MainWindow : Window, IDisposable
 
         Nav.SelectedItem = Nav.MenuItems[0];
 
+        // Default the history period here rather than in markup, and with events
+        // suppressed: a selection made during InitializeComponent would call the
+        // handler before the rest of the page exists.
+        _suppressSelectionEvents = true;
+        HistoryRangeBox.SelectedIndex = 1;
+        _suppressSelectionEvents = false;
+
         // Startup is deferred until the content is loaded, because
         // ContentDialog.ShowAsync needs a live XamlRoot and there is none in the
         // constructor. Running it here threw, and because the task was
@@ -714,13 +721,20 @@ public sealed partial class MainWindow : Window, IDisposable
         SourcesPage.Visibility = tag == "sources" ? Visibility.Visible : Visibility.Collapsed;
         AlertsPage.Visibility = tag == "alerts" ? Visibility.Visible : Visibility.Collapsed;
         TrackPage.Visibility = tag == "track" ? Visibility.Visible : Visibility.Collapsed;
+        HistoryPage.Visibility = tag == "history" ? Visibility.Visible : Visibility.Collapsed;
         SettingsPage.Visibility = tag == "settings" ? Visibility.Visible : Visibility.Collapsed;
 
-        bool built = tag is "radar" or "board" or "sources" or "settings" or "alerts" or "track";
+        bool built = tag is "radar" or "board" or "sources" or "settings" or "alerts"
+            or "track" or "history";
 
         if (tag == "alerts")
         {
             RefreshAlerts();
+        }
+
+        if (tag == "history")
+        {
+            RefreshHistory();
         }
         NotBuiltPage.Visibility = built ? Visibility.Collapsed : Visibility.Visible;
 
@@ -733,12 +747,6 @@ public sealed partial class MainWindow : Window, IDisposable
         // implying work that does not exist would be worse than an honest note.
         (string title, string detail) = tag switch
         {
-            "history" => ("History",
-                "Not built yet. Local SQLite observation history, trails and timeline playback " +
-                "are planned for Phase 2. History will be off by default."),
-            "alerts" => ("Alerts",
-                "Not built yet. Rule-based alerts with cooldown, deduplication and Windows toast " +
-                "notifications are planned for Phase 2."),
             "areas" => ("Monitoring Areas",
                 "Not built yet. The domain supports circles, cones and polygons with altitude " +
                 "bands today; the map-based editor is planned for Phase 2."),
@@ -783,14 +791,43 @@ public sealed partial class MainWindow : Window, IDisposable
             _ => (".json", "JSON", AircraftExporter.ToJson(aircraft)),
         };
 
+        string? savedAs = await SaveTextAsync(
+            content,
+            extension,
+            description,
+            string.Create(
+                CultureInfo.InvariantCulture,
+                $"openflightdisplay-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}"))
+            .ConfigureAwait(true);
+
+        if (savedAs is not null)
+        {
+            ExportStatus.Text = string.Create(
+                CultureInfo.CurrentCulture,
+                $"Exported {aircraft.Count} aircraft to {savedAs}.");
+        }
+    }
+
+    /// <summary>
+    /// Asks for a location and writes text to it.
+    /// </summary>
+    /// <returns>The file name written, or <c>null</c> if cancelled or failed.</returns>
+    /// <remarks>
+    /// Shared by the board export and the trail export, so both get the same
+    /// unpackaged-window handling and the same failure reporting.
+    /// </remarks>
+    private async Task<string?> SaveTextAsync(
+        string content,
+        string extension,
+        string description,
+        string suggestedName)
+    {
         try
         {
             var picker = new FileSavePicker
             {
                 SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
-                SuggestedFileName = string.Create(
-                    CultureInfo.InvariantCulture,
-                    $"openflightdisplay-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}"),
+                SuggestedFileName = suggestedName,
             };
 
             picker.FileTypeChoices.Add(description, [extension]);
@@ -803,20 +840,20 @@ public sealed partial class MainWindow : Window, IDisposable
             if (file is null)
             {
                 ExportStatus.Text = "Export cancelled.";
-                return;
+                HistoryStatusLine.Text = "Export cancelled.";
+                return null;
             }
 
             await FileIO.WriteTextAsync(file, content);
-
-            ExportStatus.Text = string.Create(
-                CultureInfo.CurrentCulture,
-                $"Exported {aircraft.Count} aircraft to {file.Name}.");
+            return file.Name;
         }
 #pragma warning disable CA1031 // A failed export must not take the app down.
         catch (Exception ex)
 #pragma warning restore CA1031
         {
             ExportStatus.Text = $"Export failed: {ex.Message}";
+            HistoryStatusLine.Text = $"Export failed: {ex.Message}";
+            return null;
         }
     }
 
@@ -876,6 +913,211 @@ public sealed partial class MainWindow : Window, IDisposable
 
             AlertsList.Items.Add(panel);
         }
+    }
+
+    // ---- History ----
+
+    /// <summary>Period covered by the history list, from the picker.</summary>
+    private TimeSpan HistoryRange =>
+        HistoryRangeBox.SelectedItem is ComboBoxItem { Tag: string tag }
+            && int.TryParse(tag, CultureInfo.InvariantCulture, out int hours)
+            ? TimeSpan.FromHours(hours)
+            : TimeSpan.FromHours(24);
+
+    private void OnHistoryRangeChanged(object sender, SelectionChangedEventArgs e)
+    {
+        // HistoryList is the last of this page's controls to be created, so a
+        // null here means the visual tree is still being built and there is
+        // nothing to refresh yet.
+        if (!_suppressSelectionEvents && HistoryList is not null)
+        {
+            RefreshHistory();
+        }
+    }
+
+    private void OnRefreshHistory(object sender, RoutedEventArgs e) => RefreshHistory();
+
+    /// <summary>
+    /// Rebuilds the history list from the database.
+    /// </summary>
+    /// <remarks>
+    /// Says which of the three "nothing to show" cases applies. They need
+    /// different actions from the user — turn history on, wait for data, or
+    /// widen the period — and an identical empty list for all three would leave
+    /// them guessing which.
+    /// </remarks>
+    private void RefreshHistory()
+    {
+        if (_historyStore is null)
+        {
+            HistorySummary.Text = _settings.HistoryEnabled
+                ? "History is enabled but the database could not be opened."
+                : "History is off, so nothing is being recorded. Turn it on in Settings. "
+                    + "It is off by default because it keeps a record of everything that "
+                    + "flies over you.";
+
+            HistoryList.ItemsSource = null;
+            HistoryStatusLine.Text = string.Empty;
+            return;
+        }
+
+        try
+        {
+            DateTimeOffset since = DateTimeOffset.UtcNow - HistoryRange;
+            IReadOnlyList<AircraftSummary> summaries = _historyStore.ReadMostObserved(since, limit: 200);
+
+            HistoryList.ItemsSource = summaries.Select(s => new HistoryRowViewModel(s)).ToList();
+
+            HistorySummary.Text = summaries.Count == 0
+                ? _historyStore.ObservationCount == 0
+                    ? "Nothing recorded yet. Observations appear here as aircraft are seen."
+                    : "Nothing in this period. Try a longer one."
+                : string.Create(
+                    CultureInfo.CurrentCulture,
+                    $"{summaries.Count:N0} aircraft in this period, most-seen first.");
+
+            HistoryStatusLine.Text = string.Create(
+                CultureInfo.CurrentCulture,
+                $"Database holds {_historyStore.ObservationCount:N0} observations, " +
+                $"{_historyStore.DatabaseBytes / 1024.0 / 1024.0:N1} MB, kept for " +
+                $"{_settings.HistoryRetentionDays} days. Select a row to draw its trail on the radar.");
+        }
+#pragma warning disable CA1031 // A failed read must not take the app down.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            HistorySummary.Text = $"History could not be read: {ex.Message}";
+            HistoryList.ItemsSource = null;
+        }
+    }
+
+    /// <summary>
+    /// Draws the selected aircraft's recorded track on the radar.
+    /// </summary>
+    /// <remarks>
+    /// The trail is bound to the radar's selected-aircraft trail, so choosing a
+    /// row here shows where it went even though the aircraft is long gone from
+    /// the live feed.
+    /// </remarks>
+    private void OnHistorySelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_historyStore is null
+            || HistoryList.SelectedItem is not HistoryRowViewModel row)
+        {
+            return;
+        }
+
+        try
+        {
+            ViewModel.SelectedTrail = _historyStore.ReadTrail(
+                row.IcaoHex.ToLowerInvariant(),
+                DateTimeOffset.UtcNow - HistoryRange);
+
+            HistoryStatusLine.Text = ViewModel.SelectedTrail.Count == 0
+                ? $"{row.Callsign} has no positions in this period."
+                : string.Create(
+                    CultureInfo.CurrentCulture,
+                    $"{row.Callsign}: {ViewModel.SelectedTrail.Count:N0} positions drawn on the radar.");
+        }
+#pragma warning disable CA1031 // A missing trail must not break selection.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            HistoryStatusLine.Text = $"That trail could not be read: {ex.Message}";
+        }
+    }
+
+    /// <summary>Writes one aircraft's recorded track as GeoJSON.</summary>
+    private async void OnExportTrail(object sender, RoutedEventArgs e)
+    {
+        if (_historyStore is null || sender is not FrameworkElement { Tag: string hex })
+        {
+            return;
+        }
+
+        IReadOnlyList<TrailPoint> trail;
+        try
+        {
+            trail = _historyStore.ReadTrail(hex.ToLowerInvariant(), DateTimeOffset.UtcNow - HistoryRange);
+        }
+#pragma warning disable CA1031 // A failed read must not take the app down.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            HistoryStatusLine.Text = $"That trail could not be read: {ex.Message}";
+            return;
+        }
+
+        if (trail.Count == 0)
+        {
+            HistoryStatusLine.Text = "That aircraft has no recorded positions in this period.";
+            return;
+        }
+
+        string content = AircraftExporter.TrailToGeoJson(
+            hex.ToLowerInvariant(),
+            null,
+            trail.Select(p => (p.Latitude, p.Longitude, p.AltitudeFt)));
+
+        await SaveTextAsync(content, ".geojson", "GeoJSON", $"trail-{hex.ToLowerInvariant()}")
+            .ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Erases the whole history database.
+    /// </summary>
+    /// <remarks>
+    /// Confirmed first and irreversible, so it says so. History is opt-in
+    /// because of what it records, which is the same reason deleting it has to
+    /// be possible — switching recording off only stops new rows.
+    /// </remarks>
+    private async void OnDeleteHistory(object sender, RoutedEventArgs e)
+    {
+        if (_historyStore is null)
+        {
+            HistoryStatusLine.Text = "There is no open history database to delete.";
+            return;
+        }
+
+        var confirm = new ContentDialog
+        {
+            XamlRoot = Content.XamlRoot,
+            Title = "Delete all history?",
+            Content = string.Create(
+                CultureInfo.CurrentCulture,
+                $"This permanently deletes all {_historyStore.ObservationCount:N0} recorded " +
+                $"observations and cannot be undone. Recording stays on."),
+            PrimaryButtonText = "Delete everything",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+        };
+
+        if (await confirm.ShowAsync().AsTask().ConfigureAwait(true) != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        try
+        {
+            int deleted = _historyStore.DeleteAll();
+
+            // The on-screen trail came from rows that no longer exist.
+            ViewModel.SelectedTrail = [];
+
+            HistoryStatusLine.Text = string.Create(
+                CultureInfo.CurrentCulture,
+                $"Deleted {deleted:N0} observations.");
+        }
+#pragma warning disable CA1031 // A failed delete must not take the app down.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            HistoryStatusLine.Text = $"History could not be deleted: {ex.Message}";
+            return;
+        }
+
+        RefreshHistory();
+        UpdateHistoryStatus();
     }
 
     // ---- Track Flight ----
