@@ -71,7 +71,7 @@ await work that either cannot throw or already has its own `try` — but that is
 judgement about today's code, not a guarantee. They should go through `Safe`
 too as `MainWindow` is split up (B2).
 
-### B2. `MainWindow.xaml.cs` is 2,133 lines — HIGH
+### B2. `MainWindow.xaml.cs` was 2,133 lines — FIXED 2026-08-02
 
 It owns nine pages, the feed, history, alerts, tracking, recording, the map, the
 place search, compact mode and settings. It is the only file in the project that
@@ -87,9 +87,41 @@ is genuinely hard to work in, and every feature this session made it worse.
 The rest of the codebase averages under 220 lines a file. This is an outlier, not
 a house style.
 
-**Fix:** split per page into partial classes or page classes —
-`MainWindow.History.cs`, `MainWindow.Alerts.cs`, and so on. Mechanical, no
-behaviour change, and it makes B1 tractable at the same time.
+**Fixed.** Split at the existing `// ---- x ----` markers into eight feature
+partials. No behaviour change; it compiled clean first time and all 436 tests
+pass.
+
+| File | Lines |
+|---|---|
+| `MainWindow.xaml.cs` | 928 (was 2,133) |
+| `MainWindow.Tracking.cs` | 358 |
+| `MainWindow.Areas.cs` | 245 |
+| `MainWindow.History.cs` | 219 |
+| `MainWindow.Recording.cs` | 174 |
+| `MainWindow.Diagnostics.cs` | 150 |
+| `MainWindow.Compact.cs` | 181 |
+| `MainWindow.Places.cs` | 124 |
+| `MainWindow.Map.cs` | 90 |
+
+`MainWindow.xaml.cs` is still the largest file in the project and could lose the
+settings form next, but it is no longer an outlier by an order of magnitude.
+
+### B2a. 31 mojibake sequences, 5 of them user-visible — FIXED 2026-08-02
+
+Found while verifying the split preserved bytes. **Pre-existing**, not introduced:
+29 were present in `HEAD` before the refactor.
+
+Em dashes had been decoded as CP1252 and re-encoded as UTF-8, leaving the literal
+three characters `â€”` (`U+00E2 U+20AC U+201D`) where `—` (`U+2014`) belonged.
+Verified at the byte level — `C3 A2 E2 82 AC E2 80 9D` — so it was genuine
+double encoding, not a terminal display artifact.
+
+**Five were inside string literals and reached the screen**, including the
+Track Flight page's "no distance" placeholder, which rendered as `â€”` instead of
+`—`, and `"Searchingâ€¦"` on the place search.
+
+All 31 repaired and confirmed in the running UI, which now reports `U+2014`.
+Worth noting the XAML files were clean; only the C# was affected.
 
 ### B3. The WinUI layer has zero tests — HIGH
 
