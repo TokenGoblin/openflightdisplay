@@ -170,3 +170,25 @@ jobs:
         with:
           files: artifacts/*.msix
           fail_on_unmatched_files: true
+
+          # Marked a prerelease until the packages are signed. An unsigned MSIX
+          # cannot be installed without the user hand-trusting a certificate,
+          # which is not a shippable experience, and presenting it as a full
+          # release would overstate what it is.
+          prerelease: true
+
+          # The header of this file has always claimed that an unsigned build
+          # "says so in the release notes". Until now there was no body at all,
+          # so it did not. This discharges that promise.
+          body: |
+            Windows desktop ${{ steps.version.outputs.version }}
+
+            **Signing:** ${{ steps.cert.outputs.path != '' && 'signed' || '**UNSIGNED** — Windows will refuse to install this until you trust the certificate it was built with. No signing certificate is configured for this repository.' }}
+
+            Packages are built for x64 and ARM64. **ARM64 has never been run**,
+            only compiled — there is no ARM64 machine in the development
+            environment.
+
+            See `docs/WINDOWS_DESKTOP_TROUBLESHOOTING.md` for installation and
+            known issues, and `docs/WINDOWS_DESKTOP_PRODUCTION_AUDIT.md` for what
+            is and is not ready.
