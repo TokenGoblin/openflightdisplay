@@ -23,6 +23,7 @@
             <muxc:NavigationViewItem Content="Live Radar" Tag="radar" Icon="Map" />
             <muxc:NavigationViewItem Content="Flight Board" Tag="board" Icon="List" />
             <muxc:NavigationViewItem Content="Track Flight" Tag="track" Icon="Send" />
+            <muxc:NavigationViewItem Content="Airport Board" Tag="airport" Icon="Home" />
             <muxc:NavigationViewItem Content="History" Tag="history" Icon="Clock" />
             <muxc:NavigationViewItem Content="Alerts" Tag="alerts" Icon="Message" />
             <muxc:NavigationViewItem Content="Monitoring Areas" Tag="areas" Icon="Target" />
@@ -374,6 +375,82 @@
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     </StackPanel>
                 </ScrollViewer>
+
+                <!-- Airport Board -->
+                <Grid x:Name="AirportPage" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Padding="24,20,24,12" Spacing="10">
+                        <TextBlock Text="Airport Board" FontSize="22" FontWeight="SemiBold" />
+
+                        <!--
+                            Stated at the top, not buried. This is not a flight
+                            information display and must never be mistaken for
+                            one: ADS-B carries no schedule at all.
+                        -->
+                        <InfoBar
+                            IsOpen="True"
+                            IsClosable="False"
+                            Severity="Informational"
+                            Title="Observed movements, not a schedule"
+                            Message="Built from what transponders are broadcasting right now. There are no scheduled times, no gates, no flight status and no cancellations — ADS-B carries none of that. Times shown are rough projections from current groundspeed, not arrival times." />
+
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBox
+                                x:Name="AirportIcaoBox"
+                                Header="Airport (ICAO)"
+                                PlaceholderText="KSLC"
+                                MaxLength="4"
+                                Width="160" />
+                            <Button Content="Watch" VerticalAlignment="Bottom" Click="OnWatchAirport" />
+                            <Button Content="Stop" VerticalAlignment="Bottom" Click="OnStopAirport" />
+                        </StackPanel>
+
+                        <TextBlock
+                            x:Name="AirportStatus"
+                            TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                        <InfoBar x:Name="AirportError" IsOpen="False" IsClosable="False" Severity="Warning" />
+                    </StackPanel>
+
+                    <ListView Grid.Row="1" x:Name="AirportList" SelectionMode="None">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="Padding" Value="16,8" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:AirportMovementViewModel">
+                                <Grid ColumnSpacing="16"
+                                      AutomationProperties.Name="{x:Bind AccessibleDescription}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="120" />
+                                        <ColumnDefinition Width="110" />
+                                        <ColumnDefinition Width="100" />
+                                        <ColumnDefinition Width="100" />
+                                        <ColumnDefinition Width="100" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{x:Bind Movement}" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Column="1" Text="{x:Bind Callsign}" />
+                                    <TextBlock Grid.Column="2" Text="{x:Bind Distance}"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Grid.Column="3" Text="{x:Bind Height}"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Grid.Column="4" Text="{x:Bind MinutesAway}"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Grid.Column="5" Text="{x:Bind TypeAndRegistration}"
+                                               Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
 
                 <!-- Diagnostics -->
                 <ScrollViewer x:Name="DiagnosticsPage" Visibility="Collapsed">

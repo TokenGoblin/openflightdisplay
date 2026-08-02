@@ -42,6 +42,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private readonly ProviderRegistry _providers;
     private readonly AircraftFeedService _feed;
     private readonly FlightTrackingService _tracking;
+    private readonly AirportBoardService _airportBoard;
     private readonly IServiceProvider _services;
 
     private AppSettings _settings = new();
@@ -76,8 +77,11 @@ public sealed partial class MainWindow : Window, IDisposable
         _feed = services.GetRequiredService<AircraftFeedService>();
         _tracking = services.GetRequiredService<FlightTrackingService>();
 
+        _airportBoard = services.GetRequiredService<AirportBoardService>();
+
         _tracking.StateChanged += OnTrackedFlightChanged;
         _tracking.DepartureAdviceChanged += OnDepartureAdviceChanged;
+        _airportBoard.StateChanged += OnAirportBoardChanged;
 
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
 
@@ -169,6 +173,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
         await RestartFeedAsync().ConfigureAwait(true);
         await ResumeTrackingAsync().ConfigureAwait(true);
+        await ResumeAirportBoardAsync().ConfigureAwait(true);
     }
 
     private void PopulateTrackingForm()
@@ -900,10 +905,11 @@ public sealed partial class MainWindow : Window, IDisposable
         HistoryPage.Visibility = tag == "history" ? Visibility.Visible : Visibility.Collapsed;
         DiagnosticsPage.Visibility = tag == "diagnostics" ? Visibility.Visible : Visibility.Collapsed;
         AreasPage.Visibility = tag == "areas" ? Visibility.Visible : Visibility.Collapsed;
+        AirportPage.Visibility = tag == "airport" ? Visibility.Visible : Visibility.Collapsed;
         SettingsPage.Visibility = tag == "settings" ? Visibility.Visible : Visibility.Collapsed;
 
         bool built = tag is "radar" or "board" or "sources" or "settings" or "alerts"
-            or "track" or "history" or "diagnostics" or "areas";
+            or "track" or "history" or "diagnostics" or "areas" or "airport";
 
         if (tag == "alerts")
         {

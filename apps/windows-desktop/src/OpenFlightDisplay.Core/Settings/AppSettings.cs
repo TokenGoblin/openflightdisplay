@@ -189,6 +189,15 @@ public sealed record AppSettings
     /// Flight being followed, in the callsign form ADS-B broadcasts, or
     /// <c>null</c> when nothing is tracked.
     /// </summary>
+    /// <summary>
+    /// Airport whose movements board is being watched, or <c>null</c>.
+    /// </summary>
+    /// <remarks>
+    /// Four-letter ICAO. Persisted so the board comes back on the next launch,
+    /// like the tracked flight.
+    /// </remarks>
+    public string? AirportBoardIcao { get; init; }
+
     public string? TrackedCallsign { get; init; }
 
     /// <summary>Destination ICAO code, or <c>null</c>. Four letters, never IATA.</summary>

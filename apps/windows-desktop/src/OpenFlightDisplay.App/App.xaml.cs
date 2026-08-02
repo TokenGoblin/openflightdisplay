@@ -145,6 +145,10 @@ public partial class App : Application
 
         services.AddSingleton<FlightTrackingService>();
 
+        // Its own poll around the chosen airport, which is usually not the
+        // observer's home and so is not covered by the radar's feed.
+        services.AddSingleton<AirportBoardService>();
+
         // The active provider is chosen at runtime from persisted settings via
         // ProviderRegistry, not bound here — switching data source must not
         // require rebuilding the container.

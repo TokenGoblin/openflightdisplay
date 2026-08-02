@@ -331,6 +331,7 @@ public sealed partial class MainWindow
             // while it is being flushed.
             await _feed.StopAsync().ConfigureAwait(true);
             await _tracking.StopAsync().ConfigureAwait(true);
+            await _airportBoard.StopAsync().ConfigureAwait(true);
         }
 #pragma warning disable CA1031 // Shutdown must not throw on the way out.
         catch (Exception)
