@@ -237,6 +237,56 @@
                     </ListView>
                 </Grid>
 
+                <!-- Diagnostics -->
+                <ScrollViewer x:Name="DiagnosticsPage" Visibility="Collapsed">
+                    <StackPanel Padding="24" Spacing="14" MaxWidth="760" HorizontalAlignment="Left">
+                        <TextBlock Text="Diagnostics" FontSize="22" FontWeight="SemiBold" />
+                        <TextBlock
+                            TextWrapping="Wrap"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="What the application is actually doing. Counters that should be zero are called out rather than left for you to notice." />
+
+                        <Button Content="Refresh" Click="OnRefreshDiagnostics" HorizontalAlignment="Left" />
+
+                        <InfoBar
+                            x:Name="DiagnosticsWarning"
+                            IsOpen="False"
+                            IsClosable="False"
+                            Severity="Warning" />
+
+                        <TextBlock Text="Feed" FontWeight="SemiBold" />
+                        <TextBlock x:Name="DiagFeed" TextWrapping="Wrap" FontFamily="Consolas" FontSize="13"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                        <TextBlock Text="History" FontWeight="SemiBold" />
+                        <TextBlock x:Name="DiagHistory" TextWrapping="Wrap" FontFamily="Consolas" FontSize="13"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                        <TextBlock Text="Alerts" FontWeight="SemiBold" />
+                        <TextBlock x:Name="DiagAlerts" TextWrapping="Wrap" FontFamily="Consolas" FontSize="13"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                        <TextBlock Text="Flight tracking" FontWeight="SemiBold" />
+                        <TextBlock x:Name="DiagTracking" TextWrapping="Wrap" FontFamily="Consolas" FontSize="13"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                        <TextBlock Text="Recording" FontWeight="SemiBold" />
+                        <TextBlock x:Name="DiagRecording" TextWrapping="Wrap" FontFamily="Consolas" FontSize="13"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                        <TextBlock Text="Environment" FontWeight="SemiBold" />
+                        <TextBlock x:Name="DiagEnvironment" TextWrapping="Wrap" FontFamily="Consolas" FontSize="13"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                        <Button Content="Copy all to clipboard" Click="OnCopyDiagnostics" HorizontalAlignment="Left" />
+                        <TextBlock
+                            x:Name="DiagCopyStatus"
+                            FontSize="12" TextWrapping="Wrap"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                            Text="Copying includes no coordinates and no callsigns — only counters, versions and paths." />
+                    </StackPanel>
+                </ScrollViewer>
+
                 <!-- History -->
                 <Grid x:Name="HistoryPage" Visibility="Collapsed">
                     <Grid.RowDefinitions>
