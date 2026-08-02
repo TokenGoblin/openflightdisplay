@@ -378,17 +378,73 @@
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
-                    <StackPanel Grid.Row="0" Padding="24,20,24,12" Spacing="8">
+                    <StackPanel Grid.Row="0" Padding="24,20,24,12" Spacing="10">
                         <TextBlock Text="Alerts" FontSize="22" FontWeight="SemiBold" />
                         <TextBlock
                             x:Name="AlertsSummary"
                             TextWrapping="Wrap"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <TextBlock Text="Rules" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <Button Content="Add rule" Click="OnAddAlertRule" />
+                        </StackPanel>
+
+                        <ItemsControl x:Name="RulesList" MaxWidth="720" HorizontalAlignment="Left">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:AlertRuleViewModel">
+                                    <Border
+                                        Background="{ThemeResource LayerFillColorAltBrush}"
+                                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                        BorderThickness="1" CornerRadius="6"
+                                        Padding="12,8" Margin="0,0,0,6">
+                                        <Grid ColumnSpacing="12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <ToggleSwitch
+                                                Grid.Column="0"
+                                                IsOn="{x:Bind Enabled}"
+                                                OnContent="" OffContent=""
+                                                MinWidth="44"
+                                                Toggled="OnAlertRuleToggled"
+                                                Tag="{x:Bind Id}"
+                                                VerticalAlignment="Center" />
+
+                                            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                                <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold" />
+                                                <TextBlock
+                                                    Text="{x:Bind Summary}"
+                                                    FontSize="12" TextWrapping="Wrap"
+                                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                            </StackPanel>
+
+                                            <Button Grid.Column="2" Content="Edit"
+                                                    Tag="{x:Bind Id}" Click="OnEditAlertRule"
+                                                    VerticalAlignment="Center" />
+                                            <Button Grid.Column="3" Content="Delete"
+                                                    Tag="{x:Bind Id}" Click="OnDeleteAlertRule"
+                                                    VerticalAlignment="Center" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
                         <TextBlock
+                            x:Name="NoRulesNote"
+                            Visibility="Collapsed"
                             TextWrapping="Wrap" FontSize="12" MaxWidth="620"
                             HorizontalAlignment="Left"
                             Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                            Text="One built-in rule is active: emergency squawks, with a 15 minute cooldown per aircraft. A rule editor is not built yet, so no other rules can be added." />
+                            Text="No rules are configured, so nothing will alert. Add one above." />
+
+                        <TextBlock
+                            Text="Recent alerts" FontWeight="SemiBold" Margin="0,6,0,0" />
                     </StackPanel>
 
                     <ListView Grid.Row="1" x:Name="AlertsList" SelectionMode="None">

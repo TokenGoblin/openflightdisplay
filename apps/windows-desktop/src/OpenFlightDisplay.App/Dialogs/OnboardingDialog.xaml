@@ -102,7 +102,7 @@
                 </CheckBox>
                 <TextBlock TextWrapping="Wrap" FontSize="12"
                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                           Text="Neither feature is implemented yet. Your choice is saved and takes effect when they land." />
+                           Text="Both can be changed later in Settings. Notifications also need at least one alert rule, and an emergency-squawk rule is set up for you." />
             </StackPanel>
 
             <!-- 6. Connection test -->

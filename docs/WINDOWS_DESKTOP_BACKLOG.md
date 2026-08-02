@@ -10,7 +10,7 @@ marked as unverified — nothing here is aspirational.
 
 | | |
 |---|---|
-| Tests | **332 passing**, 0 warnings under warnings-as-errors |
+| Tests | **358 passing**, 0 warnings under warnings-as-errors |
 | Build | Clean `dotnet build -c Release -p:Platform=x64` |
 | Packaging | MSIX verified locally: 88.8 MB x64, 86.3 MB ARM64 |
 | App | Launches, polls, renders. No Node.js involved |
@@ -114,11 +114,20 @@ Reference: `docs/DISPLAY_UI.md` for how the firmware presents this.
 
 The engines exist and are tested; these are the missing surfaces.
 
-- **Alert rule editor.** One built-in rule ships (emergency squawk, 15 min
-  cooldown, exempt from quiet hours). `AlertEvaluator` supports area entry/exit,
-  approach-within, descent-below, quiet hours and per-poll caps — none reachable
+- ~~**Alert rule editor.**~~ **DONE.** All five triggers are reachable, with
+  thresholds, per-rule cooldown, quiet hours and the toast channel. Verified
+  against live traffic on 2026-08-01: an "approaches within 15 km" rule fired on
+  ASA585, ASA697, EJA655, KEN2020 and AIRLIFT — exactly five, which is
+  `MaxEventsPerPoll` capping the poll as designed. Rules persist to settings and
+  the editor refuses to save one that could never fire.
+  - Rules bind to **the configured monitoring area** rather than carrying their
+    own geometry. That is what makes area triggers usable before the area editor
+    exists, and it avoids serializing a polymorphic `MonitoringArea`
+  - `AlertChannels.Sound` is deliberately **not** offered: nothing plays a sound,
+    so a switch for it would be a lie
 - **Monitoring-area editor.** `Core` supports circle, cone and polygon with
-  altitude bands. Only a circle from settings is ever constructed
+  altitude bands. Only a circle from settings is ever constructed. Per-rule areas
+  plug into `AlertRuleSetting.ToRule`
 - **Filter builder** and a **ranking-mode picker.** Seven ranking modes exist;
   the UI always uses `NearestHorizontal`
 - **History browsing / timeline playback.** Trails render; nothing else reads
@@ -186,6 +195,18 @@ matter, but they are easy to "tidy" away:
     stranger's aircraft on a screen someone uses to decide when to leave.
 11. **Departure advice fires on change, never per poll.** A ten-second toast
     cadence through an approach trains the user to dismiss the one that matters.
+12. **`AppSettings.AlertRules` is nullable and null is not empty.** Null means
+    "never configured" and seeds the emergency rule; an empty list means the user
+    deleted every rule and must be left alone. Collapsing them either leaves the
+    alert engine dormant or overrides a deliberate choice.
+13. **Dialog `Result` properties are `internal`, not `public`.** XAML's type-info
+    generator emits an activation stub for the type of every public property on a
+    XAML-backed class. A public `Result` of a type with `required` members fails
+    the build with CS9035 in generated code — a confusing error a long way from
+    its cause.
+14. **Alert rules are evaluated even when notifications are off.** The master
+    switch governs toasts, not whether alerts happen; installing no rules when it
+    is off left the in-app alert list permanently and silently empty.
 
 ---
 

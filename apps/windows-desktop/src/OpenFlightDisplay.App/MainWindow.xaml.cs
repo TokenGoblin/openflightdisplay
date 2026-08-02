@@ -362,19 +362,27 @@ public sealed partial class MainWindow : Window, IDisposable
     /// Installs alert rules and the notification channel from settings.
     /// </summary>
     /// <remarks>
-    /// Until the rule editor exists (Phase 2), one built-in rule is installed:
-    /// emergency squawks. It is the one alert that is unambiguously worth
-    /// interrupting someone for, needs no configuration, and cannot produce a
-    /// stream of noise. Shipping the engine with no rules at all would be
-    /// dormant code that looks like a feature.
+    /// <para>
+    /// Rules are evaluated whether or not notifications are enabled — the master
+    /// switch governs Windows toasts, not whether alerts happen. Turning it off
+    /// used to install no rules at all, which meant the in-app alert list stayed
+    /// permanently empty and nothing recorded that anything had been observed.
+    /// </para>
+    /// <para>
+    /// Area-based rules bind to the monitoring area built here, so there is one
+    /// area defined in one place and a rule cannot end up pointing at a stale one.
+    /// </para>
     /// </remarks>
-    private void ApplyAlertSettings()
+    private void ApplyAlertSettings(MonitoringArea? monitoringArea)
     {
         _feed.Alerts.Reset();
 
+        _feed.AlertRules = [.. _settings.EffectiveAlertRules.Select(r => r.ToRule(monitoringArea))];
+
         if (!_settings.NotificationsEnabled)
         {
-            _feed.AlertRules = [];
+            // Alerts still fire and still reach the list; they just do not
+            // interrupt with a toast.
             _feed.Notifier = NullAlertNotifier.Instance;
             return;
         }
@@ -383,29 +391,128 @@ public sealed partial class MainWindow : Window, IDisposable
             _services.GetRequiredService<ILogger<ToastAlertNotifier>>());
 
         _feed.Notifier = _notifier;
-        _feed.AlertRules =
-        [
-            new AlertRule
-            {
-                Id = "builtin-emergency",
-                Name = "Emergency squawk",
-                Trigger = AlertTrigger.EmergencySquawk,
-                Channels = AlertChannels.InApp | AlertChannels.Toast | AlertChannels.Log,
-
-                // No quiet hours on this one by design: an emergency is exactly
-                // the case where a silence window should not apply.
-                Cooldown = TimeSpan.FromMinutes(15),
-            },
-        ];
     }
+
+    // ---- alert rule editing ----
+
+    private async void OnAddAlertRule(object sender, RoutedEventArgs e)
+        => await EditRuleAsync(null).ConfigureAwait(true);
+
+    private async void OnEditAlertRule(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: string id }
+            && _settings.EffectiveAlertRules.FirstOrDefault(r => r.Id == id) is { } existing)
+        {
+            await EditRuleAsync(existing).ConfigureAwait(true);
+        }
+    }
+
+    private async Task EditRuleAsync(AlertRuleSetting? existing)
+    {
+        bool hasArea = _settings.HomeLatitude is not null && _settings.HomeLongitude is not null;
+
+        var dialog = new AlertRuleDialog(existing, hasArea)
+        {
+            XamlRoot = Content.XamlRoot,
+        };
+
+        await dialog.ShowAsync().AsTask().ConfigureAwait(true);
+
+        if (dialog.Result is not { } saved)
+        {
+            return;
+        }
+
+        // Replace by id rather than by position, so editing a rule keeps its
+        // place in the list instead of jumping to the end.
+        var rules = _settings.EffectiveAlertRules.ToList();
+        int index = rules.FindIndex(r => r.Id == saved.Id);
+
+        if (index >= 0)
+        {
+            rules[index] = saved;
+        }
+        else
+        {
+            rules.Add(saved);
+        }
+
+        await SaveRulesAsync(rules).ConfigureAwait(true);
+    }
+
+    private async void OnDeleteAlertRule(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: string id })
+        {
+            return;
+        }
+
+        var rules = _settings.EffectiveAlertRules.Where(r => r.Id != id).ToList();
+        await SaveRulesAsync(rules).ConfigureAwait(true);
+    }
+
+    private async void OnAlertRuleToggled(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ToggleSwitch { Tag: string id } toggle
+            || _settings.EffectiveAlertRules.FirstOrDefault(r => r.Id == id) is not { } rule)
+        {
+            return;
+        }
+
+        // Rebuilding the list sets IsOn programmatically, which raises Toggled
+        // again. Comparing against the stored value makes that a no-op instead
+        // of an endless save loop.
+        if (toggle.IsOn == rule.Enabled)
+        {
+            return;
+        }
+
+        var rules = _settings.EffectiveAlertRules
+            .Select(r => r.Id == id ? r with { Enabled = toggle.IsOn } : r)
+            .ToList();
+
+        await SaveRulesAsync(rules).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Persists a new rule set and puts it into effect immediately.
+    /// </summary>
+    /// <remarks>
+    /// The list is assigned even when the save fails: the rules the user just
+    /// configured apply to this session either way, and the atomic write means
+    /// a failure leaves the previous file intact rather than a partial one.
+    /// </remarks>
+    private async Task SaveRulesAsync(IReadOnlyList<AlertRuleSetting> rules)
+    {
+        _settings = _settings with { AlertRules = rules };
+
+        if (!await _settingsStore.SaveAsync(_settings).ConfigureAwait(true))
+        {
+            SettingsError.Text =
+                "The alert rules could not be saved and will be lost when the app closes. "
+                + "They are active for this session.";
+            SettingsError.Visibility = Visibility.Visible;
+        }
+
+        ApplyAlertSettings(CurrentMonitoringArea());
+        RefreshAlerts();
+    }
+
+    /// <summary>The area currently being monitored, or <c>null</c> if unset.</summary>
+    private CircleArea? CurrentMonitoringArea()
+        => _settings.HomeLatitude is { } lat && _settings.HomeLongitude is { } lon
+            ? new CircleArea(lat, lon, _settings.MonitoringRadiusKm)
+            : null;
 
     private async Task RestartFeedAsync()
     {
         double lat = _settings.HomeLatitude ?? FallbackLat;
         double lon = _settings.HomeLongitude ?? FallbackLon;
 
+        var area = new CircleArea(lat, lon, _settings.MonitoringRadiusKm);
+
         await ApplyHistorySettingAsync().ConfigureAwait(true);
-        ApplyAlertSettings();
+        ApplyAlertSettings(area);
 
         ViewModel.Units = _settings.Units;
         ViewModel.RangeKm = _settings.MonitoringRadiusKm;
@@ -426,7 +533,6 @@ public sealed partial class MainWindow : Window, IDisposable
             provider = _providers.Resolve(DataMode.Mock);
         }
 
-        var area = new CircleArea(lat, lon, _settings.MonitoringRadiusKm);
         await ViewModel.StartAsync(provider, area, lat, lon).ConfigureAwait(true);
 
         UpdateHistoryStatus();
@@ -718,12 +824,31 @@ public sealed partial class MainWindow : Window, IDisposable
     private void RefreshAlerts()
     {
         IReadOnlyList<AlertEvent> history = _feed.Alerts.History;
+        IReadOnlyList<AlertRuleSetting> rules = _settings.EffectiveAlertRules;
 
-        AlertsSummary.Text = !_settings.NotificationsEnabled
-            ? "Notifications are off. Enable them in Settings to receive alerts."
-            : history.Count == 0
-                ? "No alerts yet. Emergency squawks will appear here as they are observed."
-                : string.Create(CultureInfo.CurrentCulture, $"{history.Count} alerts this session.");
+        RulesList.ItemsSource = rules.Select(r => new AlertRuleViewModel(r)).ToList();
+        NoRulesNote.Visibility = rules.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        int enabled = rules.Count(r => r.Enabled);
+
+        // Says what is actually happening rather than only whether toasts are
+        // on: rules are evaluated and recorded either way, and a user who has
+        // notifications off still needs to know their rules are running.
+        string ruleState = enabled == 0
+            ? "No rules are enabled, so nothing will alert."
+            : string.Create(
+                CultureInfo.CurrentCulture,
+                $"{enabled} of {rules.Count} rules enabled.");
+
+        string toastState = _settings.NotificationsEnabled
+            ? string.Empty
+            : " Windows notifications are off in Settings, so alerts appear here only.";
+
+        string historyState = history.Count == 0
+            ? " Nothing has fired yet this session."
+            : string.Create(CultureInfo.CurrentCulture, $" {history.Count} fired this session.");
+
+        AlertsSummary.Text = ruleState + toastState + historyState;
 
         AlertsList.Items.Clear();
 

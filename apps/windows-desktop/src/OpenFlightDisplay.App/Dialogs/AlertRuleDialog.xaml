@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ContentDialog
+    x:Class="OpenFlightDisplay.App.Dialogs.AlertRuleDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="Alert rule"
+    PrimaryButtonText="Save"
+    CloseButtonText="Cancel"
+    DefaultButton="Primary"
+    PrimaryButtonClick="OnSave">
+
+    <ScrollViewer MaxHeight="460">
+        <StackPanel MinWidth="440" Spacing="14">
+
+            <TextBox x:Name="NameBox" Header="Name" PlaceholderText="Low overhead" />
+
+            <ComboBox
+                x:Name="TriggerBox"
+                Header="Alert when"
+                HorizontalAlignment="Stretch"
+                SelectionChanged="OnTriggerChanged" />
+
+            <!-- Only one of these is ever shown; which depends on the trigger. -->
+            <TextBox
+                x:Name="DistanceBox"
+                Header="Distance (km)"
+                PlaceholderText="10"
+                Visibility="Collapsed" />
+
+            <TextBox
+                x:Name="AltitudeBox"
+                Header="Altitude (ft)"
+                PlaceholderText="5000"
+                Visibility="Collapsed" />
+
+            <InfoBar
+                x:Name="AreaNote"
+                IsOpen="False"
+                IsClosable="False"
+                Severity="Warning"
+                Title="No monitoring area"
+                Message="This rule watches the monitoring area, but no home location is set. Set one in Settings or the rule will never fire." />
+
+            <TextBox
+                x:Name="CooldownBox"
+                Header="Cooldown (minutes)"
+                PlaceholderText="10" />
+
+            <TextBlock
+                FontSize="12" TextWrapping="Wrap"
+                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                Text="The cooldown is per aircraft. Positions arrive every few seconds, so without one an aircraft sitting inside the area would alert on every single update." />
+
+            <CheckBox x:Name="ToastCheck" Content="Show a Windows notification" />
+
+            <TextBlock
+                FontSize="12" TextWrapping="Wrap"
+                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                Text="Every alert is recorded in the list on the Alerts page whether or not this is on. Notifications also need the master switch in Settings." />
+
+            <CheckBox x:Name="QuietCheck" Content="Stay silent during quiet hours" Checked="OnQuietToggled" Unchecked="OnQuietToggled" />
+
+            <StackPanel x:Name="QuietPanel" Orientation="Horizontal" Spacing="12" Visibility="Collapsed">
+                <TimePicker x:Name="QuietStart" Header="From" ClockIdentifier="24HourClock" />
+                <TimePicker x:Name="QuietEnd" Header="Until" ClockIdentifier="24HourClock" />
+            </StackPanel>
+
+            <InfoBar
+                x:Name="ValidationError"
+                IsOpen="False"
+                IsClosable="False"
+                Severity="Error" />
+
+        </StackPanel>
+    </ScrollViewer>
+</ContentDialog>

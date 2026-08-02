@@ -1,5 +1,6 @@
 namespace OpenFlightDisplay.Core.Settings;
 
+using OpenFlightDisplay.Core.Alerts;
 using OpenFlightDisplay.Core.Ranking;
 using OpenFlightDisplay.Core.Units;
 
@@ -114,6 +115,22 @@ public sealed record AppSettings
 
     /// <summary>Windows toast notifications for alerts. Opt-in.</summary>
     public bool NotificationsEnabled { get; init; }
+
+    /// <summary>
+    /// Configured alert rules, or <c>null</c> if the user has never set any.
+    /// </summary>
+    /// <remarks>
+    /// <b>Nullable on purpose, and it is not the same as empty.</b> Null means
+    /// "never configured", which seeds the built-in emergency rule so the alert
+    /// engine is not dormant on first run. An empty list means the user
+    /// deliberately deleted every rule, and re-adding one would be the
+    /// application overriding a decision they made explicitly.
+    /// </remarks>
+    public IReadOnlyList<AlertRuleSetting>? AlertRules { get; init; }
+
+    /// <summary>Rules to install, resolving the never-configured case.</summary>
+    public IReadOnlyList<AlertRuleSetting> EffectiveAlertRules =>
+        AlertRules ?? [AlertRuleSetting.BuiltInEmergency];
 
     // ---- tracked flight ----
 

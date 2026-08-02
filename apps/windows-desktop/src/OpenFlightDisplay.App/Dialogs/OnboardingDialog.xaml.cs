@@ -47,7 +47,13 @@ public sealed partial class OnboardingDialog : ContentDialog
     }
 
     /// <summary>Settings chosen during setup. Only valid once the dialog completes.</summary>
-    public AppSettings Result { get; private set; } = new();
+    /// <remarks>
+    /// Internal for the same reason as <see cref="AlertRuleDialog.Result"/>: a
+    /// public property drags <see cref="AppSettings"/> — and everything it
+    /// references — into the generated XAML type table, which then needs to be
+    /// able to construct all of it.
+    /// </remarks>
+    internal AppSettings Result { get; private set; } = new();
 
     /// <summary>True if the user finished setup rather than skipping it.</summary>
     public bool Completed { get; private set; }
