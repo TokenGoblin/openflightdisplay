@@ -193,6 +193,101 @@ public sealed partial class RadarView : UserControl
     /// <summary>Raised when an aircraft symbol is clicked.</summary>
     public event EventHandler<AircraftRowViewModel>? AircraftSelected;
 
+    /// <summary>
+    /// Ranges the zoom control steps through, in kilometres.
+    /// </summary>
+    /// <remarks>
+    /// A fixed ladder rather than a continuous zoom. Range rings are only
+    /// readable at round numbers, and a radar whose rings read "37 km" is worse
+    /// than one that steps.
+    /// </remarks>
+    public static readonly IReadOnlyList<double> ZoomSteps =
+        [2, 5, 10, 20, 40, 80, 150, 250];
+
+    /// <summary>
+    /// Furthest the user may zoom out, in kilometres.
+    /// </summary>
+    /// <remarks>
+    /// The monitoring radius. Beyond it there is nothing to show — the provider
+    /// was never asked — and an empty band outside the last ring would read as
+    /// "no traffic there" rather than "never looked".
+    /// </remarks>
+    public double MaxRangeKm { get; set; } = 250;
+
+    /// <summary>Raised when the user zooms. The window persists the new range.</summary>
+    public event EventHandler<double>? RangeChangeRequested;
+
+    private void OnZoomIn(object sender, RoutedEventArgs e) => Zoom(-1);
+
+    private void OnZoomOut(object sender, RoutedEventArgs e) => Zoom(1);
+
+    /// <summary>
+    /// Zooms with the scroll wheel.
+    /// </summary>
+    /// <remarks>
+    /// Marked handled so the wheel does not also scroll whatever container the
+    /// radar sits in — zooming the plot and scrolling the page at once is the
+    /// usual way this feels broken.
+    /// </remarks>
+    private void OnPointerWheelChanged(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        int delta = e.GetCurrentPoint(Surface).Properties.MouseWheelDelta;
+        if (delta != 0)
+        {
+            Zoom(delta > 0 ? -1 : 1);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>Steps the range along the ladder.</summary>
+    /// <param name="direction">Negative zooms in, positive zooms out.</param>
+    private void Zoom(int direction)
+    {
+        // Nearest ladder step to the current range, so a range typed into
+        // Settings still zooms sensibly rather than jumping.
+        int index = 0;
+        double best = double.MaxValue;
+
+        for (int i = 0; i < ZoomSteps.Count; i++)
+        {
+            double distance = Math.Abs(ZoomSteps[i] - RangeKm);
+            if (distance < best)
+            {
+                best = distance;
+                index = i;
+            }
+        }
+
+        int target = Math.Clamp(index + direction, 0, ZoomSteps.Count - 1);
+        double range = ZoomSteps[target];
+
+        // Never past the monitoring radius: there is no data out there.
+        if (range > MaxRangeKm)
+        {
+            range = MaxRangeKm;
+        }
+
+        if (Math.Abs(range - RangeKm) < 0.001)
+        {
+            return;
+        }
+
+        RangeChangeRequested?.Invoke(this, range);
+    }
+
+    /// <summary>Updates the range readout beside the zoom buttons.</summary>
+    private void UpdateRangeLabel()
+    {
+        double outer = UnitConverter.DistanceFromKm(RangeKm, Units);
+
+        RangeLabel.Text = string.Create(
+            CultureInfo.CurrentCulture,
+            $"{outer:N0} {UnitConverter.DistanceUnitLabel(Units)}");
+
+        ZoomOutButton.IsEnabled = RangeKm < MaxRangeKm - 0.001;
+        ZoomInButton.IsEnabled = RangeKm > ZoomSteps[0] + 0.001;
+    }
+
     // Geometry is read fresh from the host grid on every draw.
     //
     // An earlier version cached the size from SizeChanged and shared it between
@@ -476,6 +571,7 @@ public sealed partial class RadarView : UserControl
 
     private void DrawScale()
     {
+        UpdateRangeLabel();
         ScaleCanvas.Children.Clear();
 
         if (PixelsPerKm <= 0)
@@ -651,13 +747,27 @@ public sealed partial class RadarView : UserControl
         // aircraft would make the radar disagree with the flight board with no
         // explanation, which is exactly the kind of quiet inconsistency the
         // project's no-silent-failure rule exists to prevent.
+        //
+        // Both causes are named, because they need different actions: aircraft
+        // outside the current zoom come back by zooming out, aircraft past the
+        // symbol cap do not.
+        int outsideRange = aircraft.Count(a =>
+            a.Aircraft.DistanceFromObserverKm is { } d && d > RangeKm);
+
         if (aircraft.Count > drawn)
         {
+            string reason = outsideRange > 0
+                ? string.Create(
+                    CultureInfo.CurrentCulture,
+                    $"Showing {drawn} of {aircraft.Count} aircraft — {outsideRange} are beyond " +
+                    $"this zoom. All are on the flight board.")
+                : string.Create(
+                    CultureInfo.CurrentCulture,
+                    $"Showing the nearest {drawn} of {aircraft.Count} aircraft. All are on the flight board.");
+
             var note = new TextBlock
             {
-                Text = string.Create(
-                    CultureInfo.CurrentCulture,
-                    $"Showing the nearest {drawn} of {aircraft.Count} aircraft. All are on the flight board."),
+                Text = reason,
                 FontSize = 11,
                 Foreground = mutedBrush,
                 IsHitTestVisible = false,

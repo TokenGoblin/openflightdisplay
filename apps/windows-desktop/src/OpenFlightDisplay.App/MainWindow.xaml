@@ -104,7 +104,8 @@
                         Trail="{x:Bind ViewModel.SelectedTrail, Mode=OneWay}"
                         ObserverLatitude="{x:Bind ViewModel.ObserverLatitude, Mode=OneWay}"
                         ObserverLongitude="{x:Bind ViewModel.ObserverLongitude, Mode=OneWay}"
-                        AircraftSelected="OnAircraftSelected" />
+                        AircraftSelected="OnAircraftSelected"
+                        RangeChangeRequested="OnRangeChangeRequested" />
 
                     <!-- Detail pane -->
                     <Border

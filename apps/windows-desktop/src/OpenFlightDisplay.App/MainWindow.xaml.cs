@@ -554,7 +554,13 @@ public sealed partial class MainWindow : Window, IDisposable
         ApplyAlertSettings(area);
 
         ViewModel.Units = _settings.Units;
-        ViewModel.RangeKm = _settings.MonitoringRadiusKm;
+        // Zoom is clamped to the fetch radius rather than being allowed to
+        // exceed it, so the outermost ring always marks a boundary we actually
+        // asked about.
+        Radar.MaxRangeKm = _settings.MonitoringRadiusKm;
+        ViewModel.RangeKm = Math.Min(
+            _settings.DisplayRangeKm ?? _settings.MonitoringRadiusKm,
+            _settings.MonitoringRadiusKm);
         ViewModel.ObserverLatitude = lat;
         ViewModel.ObserverLongitude = lon;
 
@@ -2386,6 +2392,23 @@ public sealed partial class MainWindow : Window, IDisposable
         {
             // Shutting down; a missed toast at that point is not worth reporting.
         }
+    }
+
+    /// <summary>
+    /// Applies a zoom change from the radar and remembers it.
+    /// </summary>
+    /// <remarks>
+    /// <b>No feed restart.</b> Zoom only changes what is drawn from data already
+    /// in hand, so it takes effect on the next frame rather than after a poll,
+    /// and costs the provider nothing. The save is fire-and-forget for the same
+    /// reason: the user should not wait on a disk to see the plot redraw.
+    /// </remarks>
+    private async void OnRangeChangeRequested(object? sender, double rangeKm)
+    {
+        ViewModel.RangeKm = rangeKm;
+
+        _settings = _settings with { DisplayRangeKm = rangeKm };
+        await _settingsStore.SaveAsync(_settings).ConfigureAwait(true);
     }
 
     private void OnAircraftSelected(object? sender, AircraftRowViewModel row)

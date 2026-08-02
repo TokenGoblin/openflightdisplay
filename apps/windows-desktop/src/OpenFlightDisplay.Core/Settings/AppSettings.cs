@@ -70,7 +70,27 @@ public sealed record AppSettings
     /// <inheritdoc cref="HomeLatitude"/>
     public double? HomeLongitude { get; init; }
 
+    /// <summary>
+    /// How far out the provider is asked for aircraft.
+    /// </summary>
+    /// <remarks>
+    /// This is a <b>fetch</b> radius, not a zoom. Changing it changes what is
+    /// requested from the provider and restarts the feed; see
+    /// <see cref="DisplayRangeKm"/> for what the radar actually draws.
+    /// </remarks>
     public double MonitoringRadiusKm { get; init; } = 80.0;
+
+    /// <summary>
+    /// Outer ring of the radar, or <c>null</c> to match the monitoring radius.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately separate from <see cref="MonitoringRadiusKm"/>. Zooming in
+    /// to read a crowded plot should not change what is asked of a
+    /// community-funded provider, and should not cost a feed restart. It is
+    /// clamped to the monitoring radius on use: drawing beyond it would show an
+    /// empty band that reads as "no traffic" rather than "never asked".
+    /// </remarks>
+    public double? DisplayRangeKm { get; init; }
 
     // ---- data source ----
 
