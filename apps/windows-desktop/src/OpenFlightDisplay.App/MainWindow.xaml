@@ -563,6 +563,22 @@
                             FontSize="12"
                             Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                             Text="adsb.lol is a free, community-funded service. The app identifies itself, caps its request radius at 250 NM and backs off when rate limited." />
+
+                        <TextBlock Text="Recordings" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        <TextBlock
+                            TextWrapping="Wrap" FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="Capture a live session to a file, then select Replay to play it back. Useful for demos and for reproducing a problem against the exact data that caused it." />
+
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <Button x:Name="RecordButton" Content="Start recording" Click="OnToggleRecording" />
+                            <Button Content="Load recording…" Click="OnLoadRecording" />
+                        </StackPanel>
+
+                        <TextBlock
+                            x:Name="RecordingStatus"
+                            TextWrapping="Wrap" FontSize="12"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
                     </StackPanel>
                 </ScrollViewer>
 

@@ -87,6 +87,17 @@ public sealed class ProviderRegistry
     /// </exception>
     public IAviationDataProvider Resolve(DataMode mode) => Resolve(mode, receiverUrl: null);
 
+    /// <summary>
+    /// Recording to play in <see cref="DataMode.Replay"/>, or <c>null</c>.
+    /// </summary>
+    /// <remarks>
+    /// Held here rather than in settings because a recording is a file the user
+    /// opened this session, not a preference. Persisting a path would mean a
+    /// deleted or moved file silently turning into an empty replay on the next
+    /// launch.
+    /// </remarks>
+    public ReplayRecording? LoadedRecording { get; set; }
+
     /// <inheritdoc cref="Resolve(DataMode)"/>
     /// <param name="receiverUrl">
     /// Base URL of a local receiver. Required for
@@ -100,9 +111,12 @@ public sealed class ProviderRegistry
 
         DataMode.LocalReceiver => CreateLocalReceiver(receiverUrl),
 
-        // An empty recording is honest: the feed reports "replay complete"
-        // immediately rather than pretending to play something.
-        DataMode.Replay => new ReplayProvider("no recording loaded", []),
+        // A recording loaded from disk, or an empty one. An empty recording is
+        // honest: the feed reports "replay complete" immediately rather than
+        // pretending to play something.
+        DataMode.Replay => LoadedRecording is { } recording
+            ? new ReplayProvider(recording.Name, recording.Frames)
+            : new ReplayProvider("no recording loaded", []),
 
         _ => throw new NotSupportedException(
             $"Data mode '{mode}' is not implemented yet. {Describe(mode)}"),

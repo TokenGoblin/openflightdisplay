@@ -19,6 +19,7 @@ using OpenFlightDisplay.Infrastructure.Settings;
 using OpenFlightDisplay.Infrastructure.Tracking;
 using OpenFlightDisplay.Persistence;
 using OpenFlightDisplay.Providers;
+using OpenFlightDisplay.Providers.Replay;
 using Windows.Storage;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
@@ -44,6 +45,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private AppSettings _settings = new();
     private HistoryStore? _historyStore;
     private HistoryObservationRecorder? _recorder;
+    private SessionReplayRecorder? _sessionRecorder;
     private ToastAlertNotifier? _notifier;
 
     /// <summary>History database location, beside the settings file.</summary>
@@ -327,7 +329,9 @@ public sealed partial class MainWindow : Window, IDisposable
         _historyStore?.Dispose();
         _historyStore = null;
 
-        _feed.Recorder = NullObservationRecorder.Instance;
+        // Recomputed rather than cleared: a session recording is independent of
+        // history and must survive history being turned off.
+        ApplyRecorders();
 
         if (!_settings.HistoryEnabled)
         {
@@ -350,7 +354,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 _historyStore,
                 _services.GetRequiredService<ILogger<HistoryObservationRecorder>>());
 
-            _feed.Recorder = _recorder;
+            ApplyRecorders();
         }
 #pragma warning disable CA1031 // History must never prevent the app running.
         catch (Exception ex)
@@ -915,6 +919,168 @@ public sealed partial class MainWindow : Window, IDisposable
         }
     }
 
+    // ---- session recording and replay ----
+
+    /// <summary>Where recordings are written, beside the settings file.</summary>
+    private static string RecordingsDirectory => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "OpenFlightDisplay",
+        "recordings");
+
+    private async void OnToggleRecording(object sender, RoutedEventArgs e)
+    {
+        if (_sessionRecorder is not null)
+        {
+            string path = _sessionRecorder.Path;
+            int frames = _sessionRecorder.FrameCount;
+            long dropped = _sessionRecorder.DroppedBatches;
+
+            await _sessionRecorder.DisposeAsync().ConfigureAwait(true);
+            _sessionRecorder = null;
+            ApplyRecorders();
+
+            RecordButton.Content = "Start recording";
+            RecordingStatus.Text = dropped == 0
+                ? string.Create(
+                    CultureInfo.CurrentCulture,
+                    $"Saved {frames:N0} frames to {path}.")
+                : string.Create(
+                    CultureInfo.CurrentCulture,
+                    $"Saved {frames:N0} frames to {path}. {dropped:N0} batches were dropped "
+                    + $"because the disk could not keep up, so the recording has gaps.");
+            return;
+        }
+
+        if (_feed.ActiveProvider is not { } provider)
+        {
+            RecordingStatus.Text = "Start a data source before recording.";
+            return;
+        }
+
+        // Recording a replay is pointless and confusing, so it is refused
+        // rather than producing a copy of a file the user already has.
+        if (provider.Id == "replay")
+        {
+            RecordingStatus.Text = "A replay cannot be recorded. Switch to a live source first.";
+            return;
+        }
+
+        try
+        {
+            string path = Path.Combine(
+                RecordingsDirectory,
+                string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"{provider.Id}-{DateTimeOffset.Now:yyyyMMdd-HHmmss}{ReplayFile.Extension}"));
+
+            ReplayRecorder writer = await ReplayRecorder
+                .StartAsync(path, provider.Id, DateTimeOffset.UtcNow)
+                .ConfigureAwait(true);
+
+            _sessionRecorder = new SessionReplayRecorder(
+                writer,
+                _services.GetRequiredService<ILogger<SessionReplayRecorder>>());
+
+            ApplyRecorders();
+
+            RecordButton.Content = "Stop recording";
+            RecordingStatus.Text = $"Recording to {path}.";
+        }
+#pragma warning disable CA1031 // A failed recording must not take the app down.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            RecordingStatus.Text = $"Recording could not be started: {ex.Message}";
+            _sessionRecorder = null;
+        }
+    }
+
+    /// <summary>
+    /// Points the feed at whichever recorders are currently active.
+    /// </summary>
+    /// <remarks>
+    /// History and session recording are independent — capturing a session to
+    /// reproduce a bug should not mean giving up the history database — so both
+    /// can be attached at once.
+    /// </remarks>
+    private void ApplyRecorders()
+    {
+        IObservationRecorder history =
+            (IObservationRecorder?)_recorder ?? NullObservationRecorder.Instance;
+
+        _feed.Recorder = _sessionRecorder is null
+            ? history
+            : new CompositeObservationRecorder(history, _sessionRecorder);
+    }
+
+    /// <summary>Opens a recording and switches the feed to replaying it.</summary>
+    private async void OnLoadRecording(object sender, RoutedEventArgs e)
+    {
+        string? path = await PickRecordingAsync().ConfigureAwait(true);
+        if (path is null)
+        {
+            return;
+        }
+
+        ReplayLoadResult result = await ReplayFile.LoadAsync(path).ConfigureAwait(true);
+
+        if (result is ReplayLoadResult.Failed failure)
+        {
+            RecordingStatus.Text = failure.Detail;
+            return;
+        }
+
+        var loaded = (ReplayLoadResult.Loaded)result;
+        _providers.LoadedRecording = loaded.Recording;
+
+        RecordingStatus.Text = loaded.SkippedLines == 0
+            ? string.Create(
+                CultureInfo.CurrentCulture,
+                $"Loaded {loaded.Recording.Name}: {loaded.Recording.Frames.Count:N0} frames "
+                + $"recorded from {loaded.Recording.ProviderId} on "
+                + $"{loaded.Recording.RecordedAt.ToLocalTime():dd MMM yyyy HH:mm}.")
+
+            // Said plainly rather than quietly handing over a short recording.
+            : string.Create(
+                CultureInfo.CurrentCulture,
+                $"Loaded {loaded.Recording.Name}: {loaded.Recording.Frames.Count:N0} frames. "
+                + $"{loaded.SkippedLines:N0} damaged lines were skipped, which usually means "
+                + $"the recording session ended abruptly.");
+
+        // Switch to replay so loading a file does what the user plainly meant.
+        _settings = _settings with { DataMode = DataMode.Replay };
+        await _settingsStore.SaveAsync(_settings).ConfigureAwait(true);
+
+        PopulateDataSources();
+        await RestartFeedAsync().ConfigureAwait(true);
+    }
+
+    private async Task<string?> PickRecordingAsync()
+    {
+        try
+        {
+            var picker = new FileOpenPicker
+            {
+                SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
+            };
+
+            picker.FileTypeFilter.Add(ReplayFile.Extension);
+
+            // Same unpackaged-window requirement as the save picker.
+            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(this));
+
+            StorageFile? file = await picker.PickSingleFileAsync();
+            return file?.Path;
+        }
+#pragma warning disable CA1031 // A failed pick must not take the app down.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            RecordingStatus.Text = $"That file could not be opened: {ex.Message}";
+            return null;
+        }
+    }
+
     // ---- History ----
 
     /// <summary>Period covered by the history list, from the picker.</summary>
@@ -1412,6 +1578,11 @@ public sealed partial class MainWindow : Window, IDisposable
         // this is bounded rather than able to hang shutdown on a slow disk.
         _recorder?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _recorder = null;
+
+        // Closes the recording file cleanly, so a session that was being
+        // recorded when the window closed still ends with a complete last frame.
+        _sessionRecorder?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        _sessionRecorder = null;
 
         _historyStore?.Dispose();
         _historyStore = null;

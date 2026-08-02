@@ -10,7 +10,7 @@ marked as unverified — nothing here is aspirational.
 
 | | |
 |---|---|
-| Tests | **358 passing**, 0 warnings under warnings-as-errors |
+| Tests | **371 passing**, 0 warnings under warnings-as-errors |
 | Build | Clean `dotnet build -c Release -p:Platform=x64` |
 | Packaging | MSIX verified locally: 88.8 MB x64, 86.3 MB ARM64 |
 | App | Launches, polls, renders. No Node.js involved |
@@ -105,8 +105,20 @@ Reference: `docs/DISPLAY_UI.md` for how the firmware presents this.
 - Gateway client mode (`DataMode.Gateway`) — listed in the picker, disabled,
   says which phase it is planned for
 - Core2 device discovery, pairing, configuration, status
-- Replay recording **file loader** — `ReplayProvider` works and is tested, but
-  no UI opens a recording, so selecting Replay reports "complete" immediately
+- ~~Replay recording **file loader**~~ **DONE.** Record a live session and play
+  it back. Verified on 2026-08-01: recorded 3 frames of live adsb.lol traffic
+  (23 aircraft each), loaded from disk, played through and reported "Replay
+  complete — reached the end of adsblol-20260801-183441".
+  - Format is **JSON Lines** (`.ofdreplay`): a header line then one frame per
+    line. A single JSON document would be unparseable if a session died before
+    the closing bracket; JSON Lines loses at most the final partial line, and the
+    loader skips damaged lines, counts them and says so
+  - Frames carry full `AircraftState`, so nullable-means-not-reported survives.
+    Computed properties are excluded from the file so they cannot drift from the
+    fields they derive from
+  - The loaded recording lives on `ProviderRegistry`, not in settings: a path
+    saved across launches would silently become an empty replay once the file
+    moved
 - Provider credentials in Windows Credential Manager (nothing needs a key today;
   `AppSettings` deliberately holds no secrets)
 
