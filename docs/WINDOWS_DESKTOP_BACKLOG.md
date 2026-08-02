@@ -10,7 +10,7 @@ marked as unverified — nothing here is aspirational.
 
 | | |
 |---|---|
-| Tests | **386 passing**, 0 warnings under warnings-as-errors |
+| Tests | **405 passing**, 0 warnings under warnings-as-errors |
 | Build | Clean `dotnet build -c Release -p:Platform=x64` |
 | Packaging | MSIX verified locally: 88.8 MB x64, 86.3 MB ARM64 |
 | App | Launches, polls, renders. No Node.js involved |
@@ -137,9 +137,17 @@ The engines exist and are tested; these are the missing surfaces.
     exists, and it avoids serializing a polymorphic `MonitoringArea`
   - `AlertChannels.Sound` is deliberately **not** offered: nothing plays a sound,
     so a switch for it would be a lie
-- **Monitoring-area editor.** `Core` supports circle, cone and polygon with
-  altitude bands. Only a circle from settings is ever constructed. Per-rule areas
-  plug into `AlertRuleSetting.ToRule`
+- ~~**Monitoring-area editor.**~~ **DONE** (form-based, not map-based). Circle,
+  cone and polygon with altitude bands, all persisted. Verified live: switching
+  to a 60°-wide cone facing 090° narrowed the board as expected and round-tripped
+  through settings.
+  - A centre-relative area stores **no coordinates** and resolves against the home
+    location, so moving home moves the area instead of leaving it over the old
+    address
+  - An area that cannot be built is refused on save rather than saved and
+    silently matching nothing
+  - Still worth doing: a **map-based** editor. Typing polygon vertices works and
+    reports the offending line number, but it is not pleasant
 - ~~**Filter builder** and a **ranking-mode picker.**~~ **DONE.** All seven
   ranking modes are selectable. `AircraftFilter` is new in `Core` — altitude
   band, airborne only, callsign required, emergencies only — applied before
@@ -227,6 +235,19 @@ matter, but they are easy to "tidy" away:
 14. **Alert rules are evaluated even when notifications are off.** The master
     switch governs toasts, not whether alerts happen; installing no rules when it
     is off left the in-app alert list permanently and silently empty.
+15. **`MonitoringAreaSetting` has a hand-written `Equals`.** A record compares an
+    `IReadOnlyList<T>` member by *reference*, so an area was never equal to itself
+    after a save and reload — writing produced an array, reading produced a list.
+    Add new properties to that method as well as to the record.
+    **`AppSettings.AlertRules` has the same latent problem** and is not yet
+    fixed: whole-`AppSettings` equality is unreliable once rules are configured.
+    Nothing in the app compares whole settings objects today, but do not start
+    without fixing it.
+16. **A `ComboBoxItem` must not carry `IsSelected="True"` in markup** when its
+    `ComboBox` has a `SelectionChanged` handler. The event fires during
+    `InitializeComponent`, before the rest of the page exists, and the app dies
+    at startup with a stowed `E_POINTER` and no usable exit code. Choose the
+    default in the constructor with events suppressed.
 
 ---
 

@@ -237,6 +237,82 @@
                     </ListView>
                 </Grid>
 
+                <!-- Monitoring Areas -->
+                <ScrollViewer x:Name="AreasPage" Visibility="Collapsed">
+                    <StackPanel Padding="24" Spacing="14" MaxWidth="620" HorizontalAlignment="Left">
+                        <TextBlock Text="Monitoring Area" FontSize="22" FontWeight="SemiBold" />
+                        <TextBlock
+                            TextWrapping="Wrap"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="What counts as nearby. Everything outside this is discarded before ranking, so it never reaches the board, the radar, alerts or history." />
+
+                        <ComboBox x:Name="AreaShapeBox" Header="Shape" MinWidth="240"
+                                  SelectionChanged="OnAreaShapeChanged">
+                            <ComboBoxItem Content="Circle — everything within a radius" Tag="Circle" />
+                            <ComboBoxItem Content="Cone — a wedge in one direction" Tag="Cone" />
+                            <ComboBoxItem Content="Polygon — an outline you define" Tag="Polygon" />
+                        </ComboBox>
+
+                        <StackPanel x:Name="AreaCentrePanel" Spacing="12">
+                            <TextBox x:Name="AreaRadiusBox" Header="Radius (km)" Width="180" />
+                            <CheckBox x:Name="AreaUseHomeCheck" Content="Centre on my home location"
+                                      Checked="OnAreaCentreToggled" Unchecked="OnAreaCentreToggled" />
+                            <StackPanel x:Name="AreaCentreCoords" Orientation="Horizontal" Spacing="12">
+                                <TextBox x:Name="AreaLatBox" Header="Centre latitude" Width="160" />
+                                <TextBox x:Name="AreaLonBox" Header="Centre longitude" Width="160" />
+                            </StackPanel>
+                            <TextBlock
+                                FontSize="12" TextWrapping="Wrap"
+                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                Text="Centring on home means moving home moves the area, rather than leaving it over your old address." />
+                        </StackPanel>
+
+                        <StackPanel x:Name="AreaConePanel" Spacing="12" Visibility="Collapsed">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <TextBox x:Name="AreaHeadingBox" Header="Facing (° true)" Width="160" />
+                                <TextBox x:Name="AreaWidthBox" Header="Width (°)" Width="160" />
+                            </StackPanel>
+                            <TextBlock
+                                FontSize="12" TextWrapping="Wrap"
+                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                Text="0° is north, 90° east. A 90° width centred on 90° covers everything from northeast to southeast." />
+                        </StackPanel>
+
+                        <StackPanel x:Name="AreaPolygonPanel" Spacing="12" Visibility="Collapsed">
+                            <TextBox
+                                x:Name="AreaVerticesBox"
+                                Header="Outline points, one per line as latitude, longitude"
+                                AcceptsReturn="True"
+                                TextWrapping="Wrap"
+                                Height="140"
+                                PlaceholderText="47.5, -122.5&#x0a;47.7, -122.5&#x0a;47.7, -122.1" />
+                            <TextBlock
+                                FontSize="12" TextWrapping="Wrap"
+                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                Text="Between 3 and 64 points. The outline closes itself, so do not repeat the first point. A map-based editor is not built yet." />
+                        </StackPanel>
+
+                        <TextBlock Text="Altitude band" FontWeight="SemiBold" />
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <TextBox x:Name="AreaMinAltBox" Header="Above (ft)" Width="160" />
+                            <TextBox x:Name="AreaMaxAltBox" Header="Below (ft)" Width="160" />
+                        </StackPanel>
+                        <TextBlock
+                            FontSize="12" TextWrapping="Wrap"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                            Text="Leave blank for no limit. An aircraft that never reported an altitude is kept, because unknown is not zero." />
+
+                        <Button Content="Save area and restart feed" Click="OnSaveArea"
+                                Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Left" />
+
+                        <InfoBar x:Name="AreaError" IsOpen="False" IsClosable="False" Severity="Error" />
+                        <TextBlock
+                            x:Name="AreaSummary"
+                            TextWrapping="Wrap"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </ScrollViewer>
+
                 <!-- Diagnostics -->
                 <ScrollViewer x:Name="DiagnosticsPage" Visibility="Collapsed">
                     <StackPanel Padding="24" Spacing="14" MaxWidth="760" HorizontalAlignment="Left">

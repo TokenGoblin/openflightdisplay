@@ -1,6 +1,7 @@
 namespace OpenFlightDisplay.Core.Settings;
 
 using OpenFlightDisplay.Core.Alerts;
+using OpenFlightDisplay.Core.Areas;
 using OpenFlightDisplay.Core.Ranking;
 using OpenFlightDisplay.Core.Units;
 
@@ -102,6 +103,17 @@ public sealed record AppSettings
     /// What reaches the board and the plot. Admits everything by default.
     /// </summary>
     public AircraftFilter Filter { get; init; } = AircraftFilter.None;
+
+    /// <summary>
+    /// The area being monitored.
+    /// </summary>
+    /// <remarks>
+    /// Defaults to a circle centred on the home location, which is what the
+    /// application used before the shape was configurable, so an existing
+    /// settings file keeps behaving the same way. <see cref="MonitoringRadiusKm"/>
+    /// remains the source of the default radius.
+    /// </remarks>
+    public MonitoringAreaSetting MonitoringArea { get; init; } = new();
 
     // ---- privacy-sensitive features, all off by default ----
 
