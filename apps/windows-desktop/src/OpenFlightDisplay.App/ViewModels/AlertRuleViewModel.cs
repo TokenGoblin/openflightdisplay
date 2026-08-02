@@ -36,4 +36,17 @@ public sealed class AlertRuleViewModel
 
     /// <summary>Trigger, thresholds, cooldown and quiet hours in one line.</summary>
     public string Summary { get; }
+
+    // Per-row accessible names. Without them a screen reader announces an
+    // unlabelled toggle and a column of identical "Edit" and "Delete" buttons,
+    // with nothing to say which rule any of them belongs to.
+
+    /// <summary>Accessible name for the enable toggle.</summary>
+    public string ToggleAccessibleName => $"Enable {Name}";
+
+    /// <summary>Accessible name for the edit button.</summary>
+    public string EditAccessibleName => $"Edit {Name}";
+
+    /// <summary>Accessible name for the delete button.</summary>
+    public string DeleteAccessibleName => $"Delete {Name}";
 }

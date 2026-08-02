@@ -481,7 +481,8 @@
                         </ListView.ItemContainerStyle>
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="vm:HistoryRowViewModel">
-                                <Grid ColumnSpacing="16">
+                                <Grid ColumnSpacing="16"
+                                      AutomationProperties.Name="{x:Bind AccessibleDescription}">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="130" />
                                         <ColumnDefinition Width="100" />
@@ -497,6 +498,7 @@
                                     <TextBlock Grid.Column="3" Text="{x:Bind Seen}"
                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                     <Button Grid.Column="4" Content="Export trail"
+                                            AutomationProperties.Name="{x:Bind ExportAccessibleName}"
                                             Tag="{x:Bind IcaoHex}" Click="OnExportTrail" />
                                 </Grid>
                             </DataTemplate>
@@ -678,6 +680,7 @@
                                                 IsOn="{x:Bind Enabled}"
                                                 OnContent="" OffContent=""
                                                 MinWidth="44"
+                                                AutomationProperties.Name="{x:Bind ToggleAccessibleName}"
                                                 Toggled="OnAlertRuleToggled"
                                                 Tag="{x:Bind Id}"
                                                 VerticalAlignment="Center" />
@@ -691,9 +694,11 @@
                                             </StackPanel>
 
                                             <Button Grid.Column="2" Content="Edit"
+                                                    AutomationProperties.Name="{x:Bind EditAccessibleName}"
                                                     Tag="{x:Bind Id}" Click="OnEditAlertRule"
                                                     VerticalAlignment="Center" />
                                             <Button Grid.Column="3" Content="Delete"
+                                                    AutomationProperties.Name="{x:Bind DeleteAccessibleName}"
                                                     Tag="{x:Bind Id}" Click="OnDeleteAlertRule"
                                                     VerticalAlignment="Center" />
                                         </Grid>
@@ -775,14 +780,24 @@
                         <TextBlock Text="Settings" FontSize="22" FontWeight="SemiBold" />
 
                         <TextBlock Text="Units" FontWeight="SemiBold" />
-                        <ComboBox x:Name="UnitsBox" MinWidth="240" SelectionChanged="OnUnitsChanged">
+                        <!--
+                            A neighbouring TextBlock is not an accessible name. A
+                            screen reader announces this as an unlabelled combo
+                            box without it, and the visible heading above is a
+                            separate element it has no relationship to.
+                        -->
+                        <ComboBox x:Name="UnitsBox" MinWidth="240"
+                                  AutomationProperties.Name="Units"
+                                  SelectionChanged="OnUnitsChanged">
                             <ComboBoxItem Content="Aviation (NM, ft, kt)" Tag="Aviation" />
                             <ComboBoxItem Content="Metric (km, m, km/h)" Tag="Metric" />
                             <ComboBoxItem Content="Imperial (mi, ft, mph)" Tag="Imperial" />
                         </ComboBox>
 
                         <TextBlock Text="Order the board by" FontWeight="SemiBold" />
-                        <ComboBox x:Name="RankingBox" MinWidth="280" SelectionChanged="OnRankingChanged">
+                        <ComboBox x:Name="RankingBox" MinWidth="280"
+                                  AutomationProperties.Name="Order the board by"
+                                  SelectionChanged="OnRankingChanged">
                             <ComboBoxItem Content="Nearest (horizontal distance)" Tag="NearestHorizontal" />
                             <ComboBoxItem Content="Nearest (slant range, includes altitude)" Tag="NearestSlantRange" />
                             <ComboBoxItem Content="Lowest altitude" Tag="LowestAltitude" />
@@ -834,7 +849,13 @@
                             PlaceholderText="http://192.168.1.10" />
 
                         <TextBlock Text="Flight history" FontWeight="SemiBold" />
-                        <CheckBox x:Name="HistoryCheck" Checked="OnHistoryToggled" Unchecked="OnHistoryToggled">
+                        <!--
+                            A CheckBox whose content is a panel rather than a
+                            string exposes no accessible name at all.
+                        -->
+                        <CheckBox x:Name="HistoryCheck"
+                                  AutomationProperties.Name="Record observations locally"
+                                  Checked="OnHistoryToggled" Unchecked="OnHistoryToggled">
                             <StackPanel>
                                 <TextBlock Text="Record observations locally" />
                                 <TextBlock

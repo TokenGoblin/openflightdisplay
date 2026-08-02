@@ -165,8 +165,22 @@ The engines exist and are tested; these are the missing surfaces.
 
 ### Phase 4 — hardening
 
-- Accessibility review (keyboard nav, screen reader, high contrast, reduced
-  motion). Rows carry `AccessibleDescription`; nothing has been audited
+- Accessibility: **partly audited on 2026-08-01**, by walking the live UI
+  Automation tree across all nine built pages.
+  - **Names: done.** 50 on-screen interactive controls, **0 unnamed**. Three real
+    defects were found and fixed: a `ComboBox` labelled only by a neighbouring
+    `TextBlock` exposes no name (a visible heading is not a label), a `CheckBox`
+    whose content is a panel rather than a string exposes none either, and a
+    `ToggleSwitch` with empty on/off content exposes none. Repeated per-row
+    buttons now name their row — a column of identical "Edit", "Delete" and
+    "Export trail" buttons is useless to a screen reader
+  - Radar symbols were already good: 23 exposed full descriptions such as
+    *"N820KE, 3.2 NM away, bearing 112° ESE, altitude 1,425 ft, CLIMB"*
+  - **Keyboard: 0 of 50 controls were unreachable**, so tab order exists, but the
+    *order* itself has not been checked
+  - **Not yet done:** high contrast, reduced motion, and a real screen-reader
+    pass with Narrator. An automation-tree walk proves names exist; it does not
+    prove the result is pleasant to listen to
 - Sleep/resume and network-failure testing
 - Mixed-DPI multi-monitor: drag the window between monitors at different scale
   factors and confirm `WM_DPICHANGED` is handled. Single-monitor 150% is verified;
