@@ -16,6 +16,7 @@ using OpenFlightDisplay.Core.Ranking;
 using OpenFlightDisplay.Core.Settings;
 using OpenFlightDisplay.Core.Units;
 using OpenFlightDisplay.Core.Tracking;
+using OpenFlightDisplay.Infrastructure.Maps;
 using OpenFlightDisplay.Infrastructure.Settings;
 using OpenFlightDisplay.Infrastructure.Tracking;
 using OpenFlightDisplay.Persistence;
@@ -144,6 +145,8 @@ public sealed partial class MainWindow : Window, IDisposable
         PopulateSettingsForm();
         PopulateTrackingForm();
         PopulateAreaForm();
+        ApplyMapSetting();
+        UpdateMapCacheStatus();
 
         await RestartFeedAsync().ConfigureAwait(true);
         await ResumeTrackingAsync().ConfigureAwait(true);
@@ -323,6 +326,7 @@ public sealed partial class MainWindow : Window, IDisposable
             LonBox.Text = _settings.HomeLongitude?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
             RadiusBox.Text = _settings.MonitoringRadiusKm.ToString(CultureInfo.CurrentCulture);
             HistoryCheck.IsChecked = _settings.HistoryEnabled;
+            MapCheck.IsChecked = _settings.MapOverlayEnabled;
             ReceiverUrlBox.Text = _settings.LocalReceiverUrl ?? string.Empty;
         }
         finally
@@ -1042,6 +1046,72 @@ public sealed partial class MainWindow : Window, IDisposable
 
             AlertsList.Items.Add(panel);
         }
+    }
+
+    // ---- map backdrop ----
+
+    /// <summary>
+    /// Turns the backdrop on or off and applies it immediately.
+    /// </summary>
+    /// <remarks>
+    /// Attribution is switched with it. OpenStreetMap's licence requires credit
+    /// wherever its imagery appears, so the two are set together rather than the
+    /// notice being a static piece of layout somebody could later "tidy" away
+    /// while leaving the map.
+    /// </remarks>
+    private async void OnMapToggled(object sender, RoutedEventArgs e)
+    {
+        if (_suppressSelectionEvents)
+        {
+            return;
+        }
+
+        _settings = _settings with { MapOverlayEnabled = MapCheck.IsChecked is true };
+        await _settingsStore.SaveAsync(_settings).ConfigureAwait(true);
+
+        ApplyMapSetting();
+        UpdateMapCacheStatus();
+    }
+
+    private void ApplyMapSetting()
+    {
+        Radar.Tiles = _settings.MapOverlayEnabled
+            ? _services.GetRequiredService<MapTileCache>()
+            : null;
+
+        ViewModel.MapAttributionVisible = _settings.MapOverlayEnabled;
+
+        // Forces the plot to rebuild so the backdrop appears or disappears
+        // without waiting for the next poll.
+        Radar.RedrawNow();
+    }
+
+    private void UpdateMapCacheStatus()
+    {
+        if (!_settings.MapOverlayEnabled)
+        {
+            MapCacheStatus.Text = "The map is off. No tiles are being requested.";
+            return;
+        }
+
+        var cache = _services.GetRequiredService<MapTileCache>();
+
+        MapCacheStatus.Text = string.Create(
+            CultureInfo.CurrentCulture,
+            $"Tiles are cached in {MapTileCache.DefaultCacheDirectory} " +
+            $"({cache.CacheBytes() / 1024.0 / 1024.0:N1} MB) and reused for " +
+            $"{MapTileCache.MaxCacheAge.TotalDays:N0} days.");
+    }
+
+    private void OnClearMapCache(object sender, RoutedEventArgs e)
+    {
+        long bytes = _services.GetRequiredService<MapTileCache>().Clear();
+
+        MapCacheStatus.Text = string.Create(
+            CultureInfo.CurrentCulture,
+            $"Cleared {bytes / 1024.0 / 1024.0:N1} MB of cached tiles.");
+
+        Radar.RedrawNow();
     }
 
     // ---- compact mode ----

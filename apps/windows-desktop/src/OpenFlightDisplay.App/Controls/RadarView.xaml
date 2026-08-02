@@ -25,6 +25,19 @@
             of its own, and left to stretch its origin depends on how the parent
             arranges a zero-size child.
         -->
+        <!--
+            Map backdrop, underneath everything. Dimmed so the rings and symbols
+            stay the most legible thing on the plot: this is context, not the
+            instrument. Clipped to the surface so tiles overhanging the edge do
+            not spill into the rest of the window.
+        -->
+        <Canvas
+            x:Name="MapCanvas"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Opacity="0.45"
+            IsHitTestVisible="False" />
+
         <Canvas
             x:Name="ScaleCanvas"
             HorizontalAlignment="Left"

@@ -6,6 +6,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using OpenFlightDisplay.App.Services;
 using OpenFlightDisplay.App.ViewModels;
+using OpenFlightDisplay.Infrastructure.Maps;
 using OpenFlightDisplay.Infrastructure.Settings;
 using OpenFlightDisplay.Infrastructure.Tracking;
 using OpenFlightDisplay.Providers.AdsbLol;
@@ -61,6 +62,17 @@ public partial class App : Application
             client.BaseAddress = new Uri("https://api.adsb.lol");
             client.Timeout = TimeSpan.FromSeconds(15);
             client.DefaultRequestHeaders.UserAgent.ParseAdd("OpenFlightDisplay-Desktop/0.1");
+        });
+
+        // OpenStreetMap's tile usage policy requires a User-Agent that identifies
+        // the application and a way to contact whoever runs it. A generic or
+        // absent one is grounds for being blocked, and rightly so.
+        services.AddHttpClient<MapTileCache>(client =>
+        {
+            client.BaseAddress = new Uri("https://tile.openstreetmap.org");
+            client.Timeout = TimeSpan.FromSeconds(20);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd(
+                "OpenFlightDisplay-Desktop/0.1 (+https://github.com/TokenGoblin/openflightdisplay)");
         });
 
         services.AddSingleton<MockProvider>(_ => new MockProvider());

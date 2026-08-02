@@ -6,11 +6,13 @@ using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Shapes;
 using OpenFlightDisplay.App.ViewModels;
 using OpenFlightDisplay.Core.Aircraft;
 using OpenFlightDisplay.Core.Geo;
 using OpenFlightDisplay.Core.Units;
+using OpenFlightDisplay.Infrastructure.Maps;
 using OpenFlightDisplay.Persistence;
 using Windows.Foundation;
 
@@ -29,7 +31,7 @@ using Windows.Foundation;
 /// fixed to the monitoring radius.
 /// </para>
 /// </remarks>
-public sealed partial class RadarView : UserControl
+public sealed partial class RadarView : UserControl, IDisposable
 {
     /// <summary>Aircraft to plot.</summary>
     public static readonly DependencyProperty AircraftProperty =
@@ -116,12 +118,52 @@ public sealed partial class RadarView : UserControl
     /// </remarks>
     public const int MaxLabels = 40;
 
+    /// <summary>
+    /// Supplies map tiles, or <c>null</c> when the backdrop is off.
+    /// </summary>
+    /// <remarks>
+    /// A property rather than a dependency property: it is set once from the
+    /// window and never bound.
+    /// </remarks>
+    public MapTileCache? Tiles { get; set; }
+
+    /// <summary>Cancels an in-flight map draw when a newer one starts.</summary>
+    private CancellationTokenSource? _mapCts;
+
+    /// <summary>
+    /// The geometry the current backdrop was drawn for.
+    /// </summary>
+    /// <remarks>
+    /// The map only needs redrawing when the centre or the scale changes, which
+    /// is rare — not on every poll. Without this the tiles would be rebuilt
+    /// every two seconds for a picture that had not moved.
+    /// </remarks>
+    private (double Lat, double Lon, double MetresPerPixel, double Width, double Height) _mapDrawnFor;
+
     private INotifyCollectionChanged? _observedCollection;
 
     /// <summary>True while a coalesced redraw is already queued.</summary>
     private bool _redrawPending;
 
     public RadarView() => InitializeComponent();
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Only the map's cancellation source needs releasing; the control itself is
+    /// owned by the visual tree.
+    /// </remarks>
+    public void Dispose()
+    {
+        _mapCts?.Dispose();
+        _mapCts = null;
+    }
+
+    /// <summary>Forces an immediate redraw, for changes the plot cannot observe.</summary>
+    /// <remarks>
+    /// Switching the map backdrop on or off changes nothing the dependency
+    /// properties watch, so the window asks for the redraw explicitly.
+    /// </remarks>
+    public void RedrawNow() => RequestRedraw();
 
     public IReadOnlyList<AircraftRowViewModel>? Aircraft
     {
@@ -315,6 +357,7 @@ public sealed partial class RadarView : UserControl
         if (!DispatcherQueue.TryEnqueue(() =>
         {
             _redrawPending = false;
+            DrawMapAsync();
             DrawScale();
             DrawAircraft();
         }))
@@ -327,8 +370,115 @@ public sealed partial class RadarView : UserControl
 
     private void OnSizeChanged(object sender, SizeChangedEventArgs e)
     {
+        // The canvases are pinned to the top-left and have no size of their own,
+        // so the backdrop is clipped here rather than by layout; otherwise tiles
+        // overhanging the plot would spill across the rest of the window.
+        Surface.Clip = new RectangleGeometry
+        {
+            Rect = new Rect(0, 0, SurfaceWidth, SurfaceHeight),
+        };
+
+        DrawMapAsync();
         DrawScale();
         DrawAircraft();
+    }
+
+    /// <summary>
+    /// Draws the map backdrop, if one is switched on.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Async and fire-and-forget by design: tiles arrive from disk or network,
+    /// and the rings and aircraft must never wait on them. If the map never
+    /// draws, the radar is exactly what it was before this feature existed.
+    /// </para>
+    /// <para>
+    /// Tiles are scaled to the radar's own metres-per-pixel rather than the
+    /// radar being rebuilt around the map, so a symbol lands over the road it is
+    /// genuinely above and the range rings keep meaning what they meant.
+    /// </para>
+    /// </remarks>
+    private async void DrawMapAsync()
+    {
+        if (Tiles is null || PixelsPerKm <= 0)
+        {
+            MapCanvas.Children.Clear();
+            _mapDrawnFor = default;
+            return;
+        }
+
+        double metresPerPixel = 1000.0 / PixelsPerKm;
+        var wanted = (ObserverLatitude, ObserverLongitude, metresPerPixel, SurfaceWidth, SurfaceHeight);
+
+        // Nothing moved, so the tiles on screen are still correct.
+        if (_mapDrawnFor == wanted && MapCanvas.Children.Count > 0)
+        {
+            return;
+        }
+
+        _mapDrawnFor = wanted;
+
+        // A newer draw supersedes an older one; without this a slow fetch from
+        // the previous geometry could land on top of the current backdrop.
+        if (_mapCts is not null)
+        {
+            await _mapCts.CancelAsync();
+            _mapCts.Dispose();
+        }
+
+        _mapCts = new CancellationTokenSource();
+        CancellationToken token = _mapCts.Token;
+
+        IReadOnlyList<TilePlacement> placements = SlippyMap.Cover(
+            ObserverLatitude, ObserverLongitude, SurfaceWidth, SurfaceHeight, metresPerPixel);
+
+        MapCanvas.Children.Clear();
+
+        foreach (TilePlacement placement in placements)
+        {
+            string? path;
+            try
+            {
+                path = await Tiles.GetTileAsync(placement.Tile, token).ConfigureAwait(true);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
+            if (token.IsCancellationRequested)
+            {
+                return;
+            }
+
+            if (path is null)
+            {
+                // A missing tile leaves a gap rather than a placeholder. An
+                // invented tile would misrepresent the ground.
+                continue;
+            }
+
+            try
+            {
+                var image = new Image
+                {
+                    Source = new BitmapImage(new Uri(path)),
+                    Width = placement.Size,
+                    Height = placement.Size,
+                    IsHitTestVisible = false,
+                };
+
+                Canvas.SetLeft(image, placement.Left);
+                Canvas.SetTop(image, placement.Top);
+                MapCanvas.Children.Add(image);
+            }
+#pragma warning disable CA1031 // A bad tile must not take the radar down.
+            catch (Exception)
+#pragma warning restore CA1031
+            {
+                // A corrupt cached image. Skipping it costs one tile.
+            }
+        }
     }
 
     private void DrawScale()

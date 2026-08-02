@@ -135,6 +135,19 @@ public sealed record AppSettings
     public bool NotificationsEnabled { get; init; }
 
     /// <summary>
+    /// Draw an OpenStreetMap backdrop under the radar.
+    /// </summary>
+    /// <remarks>
+    /// <b>Off by default and disclosed, because it is the one feature that sends
+    /// your location somewhere other than your chosen aviation-data provider.</b>
+    /// Requesting map tiles for where you live tells the tile server roughly
+    /// where you live. That is a reasonable trade for a map, but it is the
+    /// user's trade to make, not ours — the same reasoning that makes history
+    /// opt-in.
+    /// </remarks>
+    public bool MapOverlayEnabled { get; init; }
+
+    /// <summary>
     /// Configured alert rules, or <c>null</c> if the user has never set any.
     /// </summary>
     /// <remarks>

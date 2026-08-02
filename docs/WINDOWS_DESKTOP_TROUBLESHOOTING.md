@@ -9,7 +9,8 @@ What a working app looks like, captured on a 1920×1200 display at 150% scaling.
 
 | | |
 |---|---|
-| ![Radar](images/windows-desktop/radar.png) | **Live Radar** — range rings, cardinal marks, heading-oriented symbols |
+| ![Radar with map](images/windows-desktop/radar-map.png) | **Live Radar with the map backdrop on** — OpenStreetMap tiles beneath the range rings |
+| ![Radar](images/windows-desktop/radar.png) | **Live Radar** with the backdrop off, which is the default |
 | ![Track Flight](images/windows-desktop/track-flight.png) | **Track Flight** — phase, ETA, distance and departure advice |
 | ![Alert rules](images/windows-desktop/alert-rules.png) | **Alerts** — rules with per-rule cooldown and quiet hours |
 | ![History](images/windows-desktop/history.png) | **History** — recorded aircraft, most-seen first |
@@ -115,6 +116,21 @@ files — JSON Lines, so you can inspect one in a text editor.
 History is **off by default**, deliberately: it keeps a record of everything
 that flies over you. Turn it on in **Settings → Flight history**. Nothing before
 that point was recorded, and switching it on does not backfill.
+
+## The map backdrop does not appear
+
+1. **It is off by default.** Settings → **Map backdrop**. It is opt-in because
+   requesting tiles around your home tells the tile server roughly where you
+   live — the one thing the app otherwise never does.
+2. **No home location** means no centre to draw around. Set one in Settings.
+3. **No network.** Tiles are cached for 30 days, so an area you have looked at
+   before still works offline; a new area will not. The rings and symbols draw
+   regardless — the backdrop degrades, the instrument does not.
+4. **Tiles arrive over a second or two.** At most two requests run at once, on
+   purpose: this is OpenStreetMap's donated bandwidth.
+
+Cached tiles live in `%LOCALAPPDATA%\OpenFlightDisplay\tiles`. **Clear map
+cache** in Settings reports how much it freed.
 
 ## Screenshots of the window look wrong
 

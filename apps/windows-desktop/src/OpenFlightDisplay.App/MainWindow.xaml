@@ -848,6 +848,24 @@
                             HorizontalAlignment="Left"
                             PlaceholderText="http://192.168.1.10" />
 
+                        <TextBlock Text="Map backdrop" FontWeight="SemiBold" />
+                        <CheckBox x:Name="MapCheck"
+                                  AutomationProperties.Name="Show a map under the radar"
+                                  Checked="OnMapToggled" Unchecked="OnMapToggled">
+                            <StackPanel>
+                                <TextBlock Text="Show a map under the radar" />
+                                <TextBlock
+                                    TextWrapping="Wrap" MaxWidth="420" FontSize="12"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Text="Draws OpenStreetMap tiles beneath the range rings so you can see what is underneath. Off by default: asking for tiles around your home tells the tile server roughly where you live, which is the one thing this app otherwise never does." />
+                            </StackPanel>
+                        </CheckBox>
+                        <TextBlock
+                            x:Name="MapCacheStatus"
+                            FontSize="12" TextWrapping="Wrap" MaxWidth="480"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                        <Button Content="Clear map cache" Click="OnClearMapCache" HorizontalAlignment="Left" />
+
                         <TextBlock Text="Flight history" FontWeight="SemiBold" />
                         <!--
                             A CheckBox whose content is a panel rather than a
@@ -888,7 +906,7 @@
                         <TextBlock
                             FontSize="12" TextWrapping="Wrap"
                             Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                            Text="History and notifications are not implemented yet and remain off. Settings are written atomically, so an interrupted save cannot corrupt the existing file." />
+                            Text="Settings are written atomically, so an interrupted save cannot corrupt the existing file — a failed write loses the new settings, never the old ones." />
                     </StackPanel>
                 </ScrollViewer>
 
@@ -917,10 +935,22 @@
                 Background="{ThemeResource LayerFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                 BorderThickness="0,1,0,0">
-                <TextBlock
-                    Text="{x:Bind ViewModel.ProviderAttribution, Mode=OneWay}"
-                    FontSize="12"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <StackPanel Orientation="Horizontal" Spacing="16">
+                    <TextBlock
+                        Text="{x:Bind ViewModel.ProviderAttribution, Mode=OneWay}"
+                        FontSize="12"
+                        Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+
+                    <!--
+                        Required by OpenStreetMap's licence wherever its imagery
+                        is shown. Visible exactly when the backdrop is drawn.
+                    -->
+                    <TextBlock
+                        Text="Map data © OpenStreetMap contributors"
+                        Visibility="{x:Bind ViewModel.MapAttributionVisible, Mode=OneWay}"
+                        FontSize="12"
+                        Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                </StackPanel>
             </Border>
         </Grid>
     </muxc:NavigationView>

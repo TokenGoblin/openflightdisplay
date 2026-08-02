@@ -43,6 +43,18 @@ public sealed partial class FlightBoardViewModel : ObservableObject
     [ObservableProperty]
     public partial string ProviderAttribution { get; set; }
 
+    /// <summary>
+    /// Whether the OpenStreetMap credit is shown.
+    /// </summary>
+    /// <remarks>
+    /// Tied to the map backdrop being on. OpenStreetMap's licence requires
+    /// credit wherever its imagery is displayed, so this is a licence obligation
+    /// rather than a piece of decoration — it is not optional and must not be
+    /// hidden while the map is drawn.
+    /// </remarks>
+    [ObservableProperty]
+    public partial bool MapAttributionVisible { get; set; }
+
     [ObservableProperty]
     public partial UnitSystem Units { get; set; }
 

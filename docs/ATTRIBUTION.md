@@ -38,6 +38,27 @@ OpenFlightDisplay always displays which provider is currently active and its dat
 
 Phase 1 uses raster OpenStreetMap tiles via Leaflet. OpenStreetMap data is © OpenStreetMap contributors, licensed under the Open Database License — the standard OSM attribution string must remain visible on the map (Leaflet's default attribution control is not removed).
 
+## Map data (Windows desktop)
+
+The desktop radar can draw an optional OpenStreetMap backdrop beneath its range rings. Added 2026-08-01.
+
+**Attribution.** `Map data © OpenStreetMap contributors` is shown in the application's attribution bar, visible exactly whenever the backdrop is drawn. It is bound to the same flag that enables the map, so the credit cannot be left behind while the imagery is still displayed.
+
+**Tile usage policy.** OSM's [tile usage policy](https://operations.osmfoundation.org/policies/tiles/) is a condition of use of a service running on donated bandwidth, not a set of suggestions. What the implementation does to honour it:
+
+| Requirement | How it is met |
+|---|---|
+| Identifying User-Agent | `OpenFlightDisplay-Desktop/0.1` with a repository URL, set in `App.xaml.cs` |
+| No bulk downloading | Only the tiles covering the current monitoring radius are requested; the count per draw is capped in `SlippyMap.Cover` |
+| Cache locally | Tiles cached to `%LOCALAPPDATA%\OpenFlightDisplay\tiles` and reused for 30 days (`MapTileCache.MaxCacheAge`) |
+| No heavy parallelism | At most two requests in flight (`MapTileCache.MaxConcurrentFetches`) |
+| Reasonable zoom | Capped at `SlippyMap.MaxZoom` (14). A radar covering tens of kilometres never needs building-level detail |
+| No subdomain rotation | Deprecated for this service, and would only work around a connection limit that exists on purpose |
+
+A tile that fails is requested once and then left alone, rather than retried on every redraw.
+
+**Privacy.** The backdrop is **off by default and disclosed in Settings**, because requesting tiles around the user's home tells the tile server roughly where they live. Everywhere else in the application, the user's location goes only to their chosen aviation-data provider; this is the single exception, so it is the user's decision to make rather than a default.
+
 ## Datasets and icon assets
 
 Any airline/aircraft-type/airport enrichment dataset or icon set added in later phases must have its own license file recorded under `datasets/licenses/` before it is used, per `docs/DATA_SOURCE_EVALUATION.md` and `CONTRIBUTING.md`. None are bundled yet in Phase 1.
