@@ -10,7 +10,7 @@ marked as unverified — nothing here is aspirational.
 
 | | |
 |---|---|
-| Tests | **405 passing**, 0 warnings under warnings-as-errors |
+| Tests | **423 passing**, 0 warnings under warnings-as-errors |
 | Build | Clean `dotnet build -c Release -p:Platform=x64` |
 | Packaging | MSIX verified locally: 88.8 MB x64, 86.3 MB ARM64 |
 | App | Launches, polls, renders. No Node.js involved |
@@ -147,7 +147,26 @@ The engines exist and are tested; these are the missing surfaces.
   - An area that cannot be built is refused on save rather than saved and
     silently matching nothing
   - Still worth doing: a **map-based** editor. Typing polygon vertices works and
-    reports the offending line number, but it is not pleasant
+    reports the offending line number, but it is not pleasant. The radar's
+    OpenStreetMap backdrop now provides the tile plumbing this would build on
+
+### Map backdrop — DONE
+
+The radar draws optional OpenStreetMap tiles beneath its rings. Native raster
+tiles, **not** the WebView2 + MapLibre route ADR-0001 §6 chose — that decision
+was for an *interactive* map surface, and a fixed north-up backdrop at one zoom
+needs no browser, no JS bridge and no API key. The ADR's decision still stands
+for a future interactive map page.
+
+- The radar remains the source of truth for scale; tiles are scaled to its
+  pixels-per-kilometre. A test asserts the observer's map pixel lands exactly at
+  the plot centre — a backdrop offset from the symbols looks authoritative and is
+  worse than none
+- **Off by default and disclosed.** It is the only feature that sends the user's
+  location anywhere but their chosen aviation-data provider
+- OSM tile policy compliance is itemised in `docs/ATTRIBUTION.md`. Do not raise
+  `SlippyMap.MaxZoom`, remove the per-draw tile cap, or add subdomain rotation —
+  each exists to honour that policy
 - ~~**Filter builder** and a **ranking-mode picker.**~~ **DONE.** All seven
   ranking modes are selectable. `AircraftFilter` is new in `Core` — altitude
   band, airborne only, callsign required, emergencies only — applied before
