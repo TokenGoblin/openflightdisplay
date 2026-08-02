@@ -12,6 +12,7 @@ using OpenFlightDisplay.App.ViewModels;
 using OpenFlightDisplay.Core.Alerts;
 using OpenFlightDisplay.Core.Areas;
 using OpenFlightDisplay.Core.Export;
+using OpenFlightDisplay.Core.Ranking;
 using OpenFlightDisplay.Core.Settings;
 using OpenFlightDisplay.Core.Units;
 using OpenFlightDisplay.Core.Tracking;
@@ -295,6 +296,26 @@ public sealed partial class MainWindow : Window, IDisposable
 
             UnitsBox.SelectedItem ??= UnitsBox.Items[0];
 
+            foreach (object candidate in RankingBox.Items)
+            {
+                if (candidate is ComboBoxItem { Tag: string mode }
+                    && Enum.TryParse(mode, out RankingMode ranking)
+                    && ranking == _settings.RankingMode)
+                {
+                    RankingBox.SelectedItem = candidate;
+                    break;
+                }
+            }
+
+            RankingBox.SelectedItem ??= RankingBox.Items[0];
+
+            AircraftFilter filter = _settings.Filter;
+            MinAltBox.Text = filter.MinAltitudeFt?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
+            MaxAltBox.Text = filter.MaxAltitudeFt?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
+            AirborneOnlyCheck.IsChecked = filter.ExcludeOnGround;
+            RequireCallsignCheck.IsChecked = filter.RequireCallsign;
+            EmergencyOnlyCheck.IsChecked = filter.EmergencyOnly;
+
             // Blank rather than a placeholder coordinate: an unconfigured
             // location must not look like a configured one.
             LatBox.Text = _settings.HomeLatitude?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
@@ -544,7 +565,11 @@ public sealed partial class MainWindow : Window, IDisposable
             provider = _providers.Resolve(DataMode.Mock);
         }
 
-        await ViewModel.StartAsync(provider, area, lat, lon).ConfigureAwait(true);
+        _feed.Filter = _settings.Filter;
+        ViewModel.Filter = _settings.Filter;
+
+        await ViewModel.StartAsync(provider, area, lat, lon, _settings.RankingMode)
+            .ConfigureAwait(true);
 
         UpdateHistoryStatus();
     }
@@ -578,6 +603,23 @@ public sealed partial class MainWindow : Window, IDisposable
 
         // Rows are formatted at construction, so a unit change needs a rebuild
         // rather than only a property notification.
+        await RestartFeedAsync().ConfigureAwait(true);
+    }
+
+    private async void OnRankingChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressSelectionEvents
+            || RankingBox.SelectedItem is not ComboBoxItem { Tag: string tag }
+            || !Enum.TryParse(tag, out RankingMode mode))
+        {
+            return;
+        }
+
+        _settings = _settings with { RankingMode = mode };
+        await _settingsStore.SaveAsync(_settings).ConfigureAwait(true);
+
+        // Ranking is chosen when the feed starts, so this needs a restart rather
+        // than only a property change.
         await RestartFeedAsync().ConfigureAwait(true);
     }
 
@@ -627,6 +669,13 @@ public sealed partial class MainWindow : Window, IDisposable
             return;
         }
 
+        if (!TryReadFilter(out AircraftFilter filter, out string? filterError))
+        {
+            SettingsError.Text = filterError;
+            SettingsError.Visibility = Visibility.Visible;
+            return;
+        }
+
         SettingsError.Visibility = Visibility.Collapsed;
 
         // Blank clears the setting rather than storing an empty string, so
@@ -641,6 +690,7 @@ public sealed partial class MainWindow : Window, IDisposable
             HomeLongitude = lon,
             MonitoringRadiusKm = radiusKm,
             LocalReceiverUrl = receiverUrl,
+            Filter = filter,
         };
 
         bool saved = await _settingsStore.SaveAsync(_settings).ConfigureAwait(true);
@@ -654,6 +704,69 @@ public sealed partial class MainWindow : Window, IDisposable
 
         SettingsSaved.Visibility = Visibility.Visible;
         await RestartFeedAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Parses the display filter from the settings form.
+    /// </summary>
+    /// <remarks>
+    /// A blank altitude box means "no limit", which is why the fields are
+    /// nullable rather than defaulted — zero feet is a real altitude.
+    /// </remarks>
+    private bool TryReadFilter(out AircraftFilter filter, out string? error)
+    {
+        filter = AircraftFilter.None;
+        error = null;
+
+        if (!TryReadOptionalAltitude(MinAltBox.Text, out double? min))
+        {
+            error = "The 'above' altitude must be a number in feet, or blank.";
+            return false;
+        }
+
+        if (!TryReadOptionalAltitude(MaxAltBox.Text, out double? max))
+        {
+            error = "The 'below' altitude must be a number in feet, or blank.";
+            return false;
+        }
+
+        var candidate = new AircraftFilter
+        {
+            MinAltitudeFt = min,
+            MaxAltitudeFt = max,
+            ExcludeOnGround = AirborneOnlyCheck.IsChecked is true,
+            RequireCallsign = RequireCallsignCheck.IsChecked is true,
+            EmergencyOnly = EmergencyOnlyCheck.IsChecked is true,
+        };
+
+        // A filter that can never match would present as an empty sky, which is
+        // indistinguishable from a broken feed.
+        if (candidate.Validate() is { } problem)
+        {
+            error = problem;
+            return false;
+        }
+
+        filter = candidate;
+        return true;
+    }
+
+    private static bool TryReadOptionalAltitude(string? text, out double? value)
+    {
+        value = null;
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return true;
+        }
+
+        if (!double.TryParse(text, CultureInfo.CurrentCulture, out double parsed))
+        {
+            return false;
+        }
+
+        value = parsed;
+        return true;
     }
 
     /// <summary>

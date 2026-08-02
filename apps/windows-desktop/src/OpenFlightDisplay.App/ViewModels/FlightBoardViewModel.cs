@@ -130,13 +130,23 @@ public sealed partial class FlightBoardViewModel : ObservableObject
         IsBusy = false;
     }
 
+    /// <summary>
+    /// The filter currently in force, used to explain an empty board.
+    /// </summary>
+    /// <remarks>
+    /// Held here as well as on the feed so the status text can distinguish an
+    /// empty sky from a board the user filtered empty themselves.
+    /// </remarks>
+    public Core.Ranking.AircraftFilter Filter { get; set; } = Core.Ranking.AircraftFilter.None;
+
     /// <summary>Starts the feed for the given provider and area.</summary>
     public Task StartAsync(
         Providers.IAviationDataProvider provider,
         MonitoringArea area,
         double observerLat,
-        double observerLon)
-        => _feed.StartAsync(provider, area, observerLat, observerLon);
+        double observerLon,
+        Core.Ranking.RankingMode rankingMode = Core.Ranking.RankingMode.NearestHorizontal)
+        => _feed.StartAsync(provider, area, observerLat, observerLon, rankingMode);
 
     private void OnFeedStateChanged(object? sender, FeedState state)
     {
@@ -183,10 +193,21 @@ public sealed partial class FlightBoardViewModel : ObservableObject
 
             case FeedState.NoMatchingAircraft none:
                 // Explicitly not an error. An empty sky is a correct answer.
-                StatusHeadline = "No aircraft in range";
-                StatusDetail =
-                    $"{none.ProviderId} responded normally, updated {Ago(none.ObservedAt, now)}. " +
-                    "Try widening the monitoring radius.";
+                //
+                // But an empty board caused by the user's own filter is NOT an
+                // empty sky, and reporting them identically is how somebody
+                // concludes the feed is broken. The active filter is named so
+                // the cause is obvious and the fix is one page away.
+                StatusHeadline = Filter.IsEmpty
+                    ? "No aircraft in range"
+                    : "Nothing matches your filter";
+
+                StatusDetail = Filter.IsEmpty
+                    ? $"{none.ProviderId} responded normally, updated {Ago(none.ObservedAt, now)}. " +
+                        "Try widening the monitoring radius."
+                    : $"{none.ProviderId} responded normally, updated {Ago(none.ObservedAt, now)}. " +
+                        $"{Filter.Summarise()}. Change or clear the filter in Settings.";
+
                 StatusSeverity = StatusSeverity.Info;
                 break;
 

@@ -4,6 +4,7 @@ using OpenFlightDisplay.Core.Alerts;
 using OpenFlightDisplay.Core.Ranking;
 using OpenFlightDisplay.Core.Units;
 
+
 /// <summary>Where the aircraft data comes from.</summary>
 public enum DataMode
 {
@@ -96,6 +97,11 @@ public sealed record AppSettings
     public bool UseUtc { get; init; }
 
     public RankingMode RankingMode { get; init; } = RankingMode.NearestHorizontal;
+
+    /// <summary>
+    /// What reaches the board and the plot. Admits everything by default.
+    /// </summary>
+    public AircraftFilter Filter { get; init; } = AircraftFilter.None;
 
     // ---- privacy-sensitive features, all off by default ----
 

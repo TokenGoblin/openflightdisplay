@@ -594,6 +594,34 @@
                             <ComboBoxItem Content="Imperial (mi, ft, mph)" Tag="Imperial" />
                         </ComboBox>
 
+                        <TextBlock Text="Order the board by" FontWeight="SemiBold" />
+                        <ComboBox x:Name="RankingBox" MinWidth="280" SelectionChanged="OnRankingChanged">
+                            <ComboBoxItem Content="Nearest (horizontal distance)" Tag="NearestHorizontal" />
+                            <ComboBoxItem Content="Nearest (slant range, includes altitude)" Tag="NearestSlantRange" />
+                            <ComboBoxItem Content="Lowest altitude" Tag="LowestAltitude" />
+                            <ComboBoxItem Content="Highest altitude" Tag="HighestAltitude" />
+                            <ComboBoxItem Content="Fastest" Tag="Fastest" />
+                            <ComboBoxItem Content="Most recently seen" Tag="NewestObservation" />
+                            <ComboBoxItem Content="Emergencies first, then nearest" Tag="EmergencyPriority" />
+                        </ComboBox>
+                        <TextBlock
+                            FontSize="12" TextWrapping="Wrap" MaxWidth="480"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                            Text="Slant range counts altitude, so an airliner directly overhead at 36,000 ft is about 11 km away rather than zero." />
+
+                        <TextBlock Text="Show only" FontWeight="SemiBold" />
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <TextBox x:Name="MinAltBox" Header="Above (ft)" Width="140" />
+                            <TextBox x:Name="MaxAltBox" Header="Below (ft)" Width="140" />
+                        </StackPanel>
+                        <CheckBox x:Name="AirborneOnlyCheck" Content="Airborne only (hide ground traffic)" />
+                        <CheckBox x:Name="RequireCallsignCheck" Content="Only aircraft transmitting a callsign" />
+                        <CheckBox x:Name="EmergencyOnlyCheck" Content="Emergencies only" />
+                        <TextBlock
+                            FontSize="12" TextWrapping="Wrap" MaxWidth="480"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                            Text="An aircraft that never reported its altitude is never hidden by an altitude filter — unknown is not zero. Leave a box blank for no limit." />
+
                         <TextBlock Text="Home location" FontWeight="SemiBold" />
                         <TextBlock
                             FontSize="12" TextWrapping="Wrap"

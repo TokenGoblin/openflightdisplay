@@ -62,6 +62,15 @@ public sealed partial class AircraftFeedService : IAsyncDisposable
     public IAlertNotifier Notifier { get; set; } = NullAlertNotifier.Instance;
 
     /// <summary>
+    /// Narrows what reaches the board and the plot. Admits everything by default.
+    /// </summary>
+    /// <remarks>
+    /// A settable property rather than a constructor argument so changing the
+    /// filter takes effect on the next poll instead of restarting the feed.
+    /// </remarks>
+    public AircraftFilter Filter { get; set; } = AircraftFilter.None;
+
+    /// <summary>
     /// Evaluator holding the transition and cooldown state between polls.
     /// </summary>
     public AlertEvaluator Alerts { get; } = new();
@@ -228,8 +237,11 @@ public sealed partial class AircraftFeedService : IAsyncDisposable
     {
         DateTimeOffset now = _timeProvider.GetUtcNow();
 
+        // Filtered before ranking so the cap and the ordering both apply to what
+        // the user actually asked to see, and before recording so history holds
+        // the same set.
         IReadOnlyList<AircraftState> ranked = AircraftRanker.Rank(
-            success.Aircraft.Select(a => Staleness.WithStalenessApplied(a, now)),
+            Filter.Apply(success.Aircraft.Select(a => Staleness.WithStalenessApplied(a, now))),
             area,
             observerLat,
             observerLon,

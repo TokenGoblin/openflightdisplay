@@ -10,7 +10,7 @@ marked as unverified — nothing here is aspirational.
 
 | | |
 |---|---|
-| Tests | **371 passing**, 0 warnings under warnings-as-errors |
+| Tests | **386 passing**, 0 warnings under warnings-as-errors |
 | Build | Clean `dotnet build -c Release -p:Platform=x64` |
 | Packaging | MSIX verified locally: 88.8 MB x64, 86.3 MB ARM64 |
 | App | Launches, polls, renders. No Node.js involved |
@@ -140,8 +140,16 @@ The engines exist and are tested; these are the missing surfaces.
 - **Monitoring-area editor.** `Core` supports circle, cone and polygon with
   altitude bands. Only a circle from settings is ever constructed. Per-rule areas
   plug into `AlertRuleSetting.ToRule`
-- **Filter builder** and a **ranking-mode picker.** Seven ranking modes exist;
-  the UI always uses `NearestHorizontal`
+- ~~**Filter builder** and a **ranking-mode picker.**~~ **DONE.** All seven
+  ranking modes are selectable. `AircraftFilter` is new in `Core` — altitude
+  band, airborne only, callsign required, emergencies only — applied before
+  ranking and before recording. Verified live: a 20,000 ft floor took the board
+  from 17 aircraft to 2.
+  - **An unreported measurement never fails a filter.** An aircraft with no
+    altitude is not at zero feet, so an altitude filter cannot honestly exclude
+    it. Unknown passes
+  - An empty board caused by a filter says so and names the filter, rather than
+    reusing "No aircraft in range" — otherwise a user concludes the feed broke
 - **History browsing / timeline playback.** Trails render; nothing else reads
   the database
 - **Export UI for trails** — `AircraftExporter.TrailToGeoJson` has no caller
